@@ -1,0 +1,62 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/eeeemail-domain",
+  "crates/eeeemail-config",
+  "crates/eeeemail-provider",
+  "crates/eeeemail-store",
+  "crates/eeeemail-core",
+  "crates/eeeemail-tui",
+  "crates/eeeemail-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Multi-provider email client (CLI + TUI), Rust implementation"
+
+# ---------------------------------------------------------------------------
+# Shared dependency versions. Keep every crate on the same versions so the
+# dependency graph stays a single copy.
+# ---------------------------------------------------------------------------
+[workspace.dependencies]
+eeeemail-domain = { path = "crates/eeeemail-domain" }
+eeeemail-config = { path = "crates/eeeemail-config" }
+eeeemail-provider = { path = "crates/eeeemail-provider" }
+eeeemail-store = { path = "crates/eeeemail-store" }
+eeeemail-core = { path = "crates/eeeemail-core" }
+eeeemail-tui = { path = "crates/eeeemail-tui" }
+
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "5"
+base64 = "0.22"
+
+# Network / mail protocols
+imap = "2.4"
+native-tls = "0.2"
+mailparse = "0.16"
+lettre = { version = "0.11", default-features = false, features = [
+  "smtp-transport",
+  "native-tls",
+  "builder",
+  "hostname",
+] }
+
+# Storage
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# UI
+clap = { version = "4", features = ["derive"] }
+ratatui = "0.29"
+
+[profile.release]
+opt-level = 2
+strip = true

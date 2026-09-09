@@ -1,0 +1,16 @@
+[package]
+name = "eeeemail-tui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Terminal UI: browse folders, sync mail and compose/send"
+
+[dependencies]
+eeeemail-config = { workspace = true }
+eeeemail-core = { workspace = true }
+eeeemail-domain = { workspace = true }
+
+anyhow.workspace = true
+chrono.workspace = true
+ratatui.workspace = true
+tracing.workspace = true

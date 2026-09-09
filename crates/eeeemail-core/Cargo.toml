@@ -1,0 +1,18 @@
+[package]
+name = "eeeemail-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Application layer: mail / sync / search / compose / outbox services"
+
+[dependencies]
+eeeemail-config = { workspace = true }
+eeeemail-domain = { workspace = true }
+eeeemail-provider = { workspace = true }
+eeeemail-store = { workspace = true }
+
+chrono.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true

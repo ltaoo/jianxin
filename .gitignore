@@ -1,0 +1,9 @@
+/target
+**/*.rs.bk
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+.DS_Store
+config.json
+!config.example.json

@@ -1,0 +1,22 @@
+[package]
+name = "eeeemail-provider"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "MailProvider abstraction, capability system, auth providers and registry"
+
+[dependencies]
+eeeemail-config = { workspace = true }
+eeeemail-domain = { workspace = true }
+
+base64.workspace = true
+chrono.workspace = true
+imap.workspace = true
+lettre.workspace = true
+mailparse.workspace = true
+native-tls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
