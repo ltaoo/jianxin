@@ -32,11 +32,12 @@ pub use traits::{ListMessagesOptions, MailProvider, SearchQuery, SyncDelta};
 
 use eeeemail_config::{presets, AccountConfig, SyncConfig};
 pub use eeeemail_domain::FlagUpdate;
-use eeeemail_domain::{MailError, MailErrorCode, Result};
+pub use eeeemail_domain::ProviderId;
+use eeeemail_domain::Result;
 
-pub const GENERIC_IMAP: &str = "generic-imap";
-pub const GOOGLE: &str = google::ID;
-pub const MICROSOFT: &str = microsoft::ID;
+pub const GENERIC_IMAP: ProviderId = ProviderId::GenericImap;
+pub const GOOGLE: ProviderId = google::ID;
+pub const MICROSOFT: ProviderId = microsoft::ID;
 
 /// Registry of known providers.
 ///
@@ -49,7 +50,7 @@ pub struct ProviderRegistry {
 
 #[derive(Debug)]
 struct RegistryEntry {
-    id: &'static str,
+    id: ProviderId,
     domains: Vec<&'static str>,
 }
 
@@ -77,7 +78,7 @@ impl ProviderRegistry {
     }
 
     /// Level 1 of detection: is the email domain already known?
-    pub fn detect_provider(&self, email: &str) -> Option<&'static str> {
+    pub fn detect_provider(&self, email: &str) -> Option<ProviderId> {
         let domain = email.rsplit('@').next()?.trim().to_ascii_lowercase();
         self.entries
             .iter()
@@ -95,24 +96,17 @@ impl ProviderRegistry {
         config: &AccountConfig,
         sync: &SyncConfig,
     ) -> Result<Box<dyn MailProvider>> {
-        match config.provider_key().as_str() {
+        match config.provider_key() {
             GOOGLE => Ok(Box::new(google::build(config, sync)?)),
             MICROSOFT => Ok(Box::new(microsoft::build(config, sync)?)),
             GENERIC_IMAP => Ok(Box::new(GenericImapProvider::from_config(config, sync)?)),
-            other => Err(MailError::new(
-                MailErrorCode::InvalidConfig,
-                format!(
-                    "unknown provider `{other}` for {} (expected one of: {GENERIC_IMAP}, {GOOGLE}, {MICROSOFT})",
-                    config.email
-                ),
-            )),
         }
     }
 }
 
 /// Convenience wrapper around `ProviderRegistry::detect_provider` for cases
 /// that only need "is this a known vendor?".
-pub fn detect_provider(email: &str) -> &'static str {
+pub fn detect_provider(email: &str) -> ProviderId {
     ProviderRegistry::builtin()
         .detect_provider(email)
         .unwrap_or(GENERIC_IMAP)

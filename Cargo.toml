@@ -6,6 +6,7 @@ members = [
   "crates/eeeemail-provider",
   "crates/eeeemail-store",
   "crates/eeeemail-core",
+  "crates/eeeemail-agent",
   "crates/eeeemail-tui",
   "crates/eeeemail-cli",
 ]
@@ -26,6 +27,7 @@ eeeemail-config = { path = "crates/eeeemail-config" }
 eeeemail-provider = { path = "crates/eeeemail-provider" }
 eeeemail-store = { path = "crates/eeeemail-store" }
 eeeemail-core = { path = "crates/eeeemail-core" }
+eeeemail-agent = { path = "crates/eeeemail-agent" }
 eeeemail-tui = { path = "crates/eeeemail-tui" }
 
 anyhow = "1"
@@ -37,7 +39,9 @@ uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dirs = "5"
+dotenvy = "0.15"
 base64 = "0.22"
+ureq = "2"
 
 # Network / mail protocols
 imap = "2.4"

@@ -4,8 +4,8 @@
 //! Graph stores a `deltaLink`, Gmail a `historyId`, IMAP `UIDVALIDITY:UID`.
 //! Assuming `nextPageToken` semantics here would break two of the three (§19).
 
-use eeeemail_domain::{Result, SyncCursor};
-use rusqlite::{Connection, OptionalExtension};
+use eeeemail_domain::{ProviderId, Result, SyncCursor};
+use rusqlite::{types::Type, Connection, OptionalExtension};
 
 use crate::migrations::db_err;
 
@@ -15,8 +15,9 @@ pub fn get(conn: &Connection, account_id: &str, folder_id: &str) -> Result<Optio
            FROM sync_states WHERE account_id = ?1 AND folder_id = ?2",
         rusqlite::params![account_id, folder_id],
         |row| {
+            let provider = provider_from_db(row.get(0)?, 0)?;
             Ok(SyncCursor {
-                provider: row.get(0)?,
+                provider,
                 account_id: row.get(1)?,
                 folder_id: row.get(2)?,
                 cursor_type: row.get(3)?,
@@ -42,7 +43,7 @@ pub fn set(conn: &Connection, cursor: &SyncCursor) -> Result<()> {
         rusqlite::params![
             cursor.account_id,
             cursor.folder_id,
-            cursor.provider,
+            cursor.provider.as_str(),
             cursor.cursor_type,
             cursor.cursor,
             eeeemail_domain::now_ts(),
@@ -54,7 +55,12 @@ pub fn set(conn: &Connection, cursor: &SyncCursor) -> Result<()> {
 
 /// Record a failed sync without destroying the checkpoint — the next run
 /// resumes from the same place.
-pub fn record_error(conn: &Connection, account_id: &str, folder_id: &str, error: &str) -> Result<()> {
+pub fn record_error(
+    conn: &Connection,
+    account_id: &str,
+    folder_id: &str,
+    error: &str,
+) -> Result<()> {
     conn.execute(
         "UPDATE sync_states SET last_error = ?3 WHERE account_id = ?1 AND folder_id = ?2",
         rusqlite::params![account_id, folder_id, error],
@@ -74,8 +80,11 @@ pub fn clear(conn: &Connection, account_id: &str, folder_id: &str) -> Result<()>
 }
 
 pub fn clear_account(conn: &Connection, account_id: &str) -> Result<()> {
-    conn.execute("DELETE FROM sync_states WHERE account_id = ?1", [account_id])
-        .map_err(db_err)?;
+    conn.execute(
+        "DELETE FROM sync_states WHERE account_id = ?1",
+        [account_id],
+    )
+    .map_err(db_err)?;
     Ok(())
 }
 
@@ -84,7 +93,7 @@ pub fn clear_account(conn: &Connection, account_id: &str) -> Result<()> {
 pub struct SyncStateRow {
     pub account_id: String,
     pub folder_id: String,
-    pub provider: String,
+    pub provider: ProviderId,
     pub cursor_type: String,
     pub cursor: String,
     pub last_synced_at: Option<i64>,
@@ -100,10 +109,11 @@ pub fn list_for_account(conn: &Connection, account_id: &str) -> Result<Vec<SyncS
         .map_err(db_err)?;
     let rows = stmt
         .query_map([account_id], |row| {
+            let provider = provider_from_db(row.get(2)?, 2)?;
             Ok(SyncStateRow {
                 account_id: row.get(0)?,
                 folder_id: row.get(1)?,
-                provider: row.get(2)?,
+                provider,
                 cursor_type: row.get(3)?,
                 cursor: row.get(4)?,
                 last_synced_at: row.get(5)?,
@@ -114,6 +124,11 @@ pub fn list_for_account(conn: &Connection, account_id: &str) -> Result<Vec<SyncS
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(db_err)?;
     Ok(rows)
+}
+
+fn provider_from_db(value: String, index: usize) -> rusqlite::Result<ProviderId> {
+    ProviderId::parse(&value)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(index, Type::Text, Box::new(err)))
 }
 
 #[cfg(test)]
@@ -139,7 +154,7 @@ mod tests {
 
     fn cursor(folder: &str, value: &str) -> SyncCursor {
         SyncCursor {
-            provider: "generic-imap".to_string(),
+            provider: ProviderId::GenericImap,
             account_id: "acc".to_string(),
             folder_id: folder.to_string(),
             cursor_type: "uid".to_string(),

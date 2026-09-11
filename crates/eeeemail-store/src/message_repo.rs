@@ -299,6 +299,19 @@ pub fn remote_ids_in_folder(conn: &Connection, folder_id: &str) -> Result<Vec<St
     Ok(rows)
 }
 
+/// Every local message id for an account, used by the watcher to diff a sync.
+pub fn ids_for_account(conn: &Connection, account_id: &str) -> Result<Vec<MessageId>> {
+    let mut stmt = conn
+        .prepare("SELECT id FROM messages WHERE account_id = ?1")
+        .map_err(db_err)?;
+    let rows = stmt
+        .query_map([account_id], |row| row.get::<_, String>(0))
+        .map_err(db_err)?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(db_err)?;
+    Ok(rows)
+}
+
 /// Delete messages that vanished remotely.
 pub fn remove_by_remote_ids(
     conn: &Connection,

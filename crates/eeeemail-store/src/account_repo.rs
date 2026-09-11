@@ -3,8 +3,8 @@
 //! Deliberately credential-free: the account is the *local* identity, secrets
 //! are resolved at runtime from env / keychain / secret command (§22).
 
-use eeeemail_domain::{Account, AuthType, MailError, MailErrorCode, Result};
-use rusqlite::{Connection, OptionalExtension};
+use eeeemail_domain::{Account, AuthType, ProviderId, Result};
+use rusqlite::{types::Type, Connection, OptionalExtension};
 
 use crate::migrations::db_err;
 
@@ -21,7 +21,7 @@ pub fn upsert(conn: &Connection, account: &Account) -> Result<()> {
              updated_at   = excluded.updated_at",
         rusqlite::params![
             account.id,
-            account.provider,
+            account.provider.as_str(),
             account.email,
             account.display_name,
             account.auth_type.as_str(),
@@ -76,15 +76,21 @@ pub fn count(conn: &Connection) -> Result<u64> {
 
 fn row_to_account(row: &rusqlite::Row<'_>) -> rusqlite::Result<Account> {
     let auth: String = row.get(4)?;
+    let provider = provider_from_db(row.get(1)?, 1)?;
     Ok(Account {
         id: row.get(0)?,
-        provider: row.get(1)?,
+        provider,
         email: row.get(2)?,
         display_name: row.get(3)?,
         auth_type: parse_auth_type(&auth),
         created_at: row.get(5)?,
         updated_at: row.get(6)?,
     })
+}
+
+fn provider_from_db(value: String, index: usize) -> rusqlite::Result<ProviderId> {
+    ProviderId::parse(&value)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(index, Type::Text, Box::new(err)))
 }
 
 fn parse_auth_type(value: &str) -> AuthType {
@@ -97,18 +103,6 @@ fn parse_auth_type(value: &str) -> AuthType {
     }
 }
 
-/// Guard against a caller inventing a provider key the registry has never
-/// heard of. Used by the config import path.
-pub fn ensure_known_provider(provider: &str) -> Result<()> {
-    if provider.trim().is_empty() {
-        return Err(MailError::new(
-            MailErrorCode::InvalidConfig,
-            "account provider is empty",
-        ));
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,8 +110,8 @@ mod tests {
 
     fn account(email: &str) -> Account {
         Account {
-            id: Account::deterministic_id("generic-imap", email),
-            provider: "generic-imap".to_string(),
+            id: Account::deterministic_id(ProviderId::GenericImap, email),
+            provider: ProviderId::GenericImap,
             email: email.to_string(),
             display_name: Some("Test".to_string()),
             auth_type: AuthType::AppPassword,

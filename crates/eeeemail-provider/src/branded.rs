@@ -13,7 +13,7 @@
 use eeeemail_config::{AccountConfig, SyncConfig};
 use eeeemail_domain::{
     ComposeMessage, Folder, MailError, MailErrorCode, Message, MessagePage, ProviderCapabilities,
-    Result, SendResult, SyncCursor,
+    ProviderId, Result, SendResult, SyncCursor,
 };
 use std::time::Duration;
 
@@ -22,7 +22,7 @@ use crate::traits::{ListMessagesOptions, MailProvider, SearchQuery, SyncDelta};
 
 /// A provider identity (id + capabilities) wrapped around an IMAP transport.
 pub struct BrandedProvider {
-    id: &'static str,
+    id: ProviderId,
     /// Human readable note surfaced by `eeeemail accounts`.
     pub note: &'static str,
     capabilities: ProviderCapabilities,
@@ -33,7 +33,7 @@ pub struct BrandedProvider {
 
 impl BrandedProvider {
     pub fn new(
-        id: &'static str,
+        id: ProviderId,
         note: &'static str,
         capabilities: ProviderCapabilities,
         inner: GenericImapProvider,
@@ -48,7 +48,7 @@ impl BrandedProvider {
     }
 
     pub fn from_config(
-        id: &'static str,
+        id: ProviderId,
         note: &'static str,
         capabilities: ProviderCapabilities,
         config: &AccountConfig,
@@ -64,7 +64,7 @@ impl BrandedProvider {
 }
 
 impl MailProvider for BrandedProvider {
-    fn id(&self) -> &str {
+    fn id(&self) -> ProviderId {
         self.id
     }
 
@@ -130,10 +130,12 @@ impl MailProvider for BrandedProvider {
 }
 
 /// Placeholder used by transports that are planned but not implemented.
-pub fn not_implemented(provider: &str) -> MailError {
+pub fn not_implemented(provider: ProviderId) -> MailError {
     MailError::new(
         MailErrorCode::UnsupportedFeature,
-        format!("{provider} native API transport is not implemented yet; it currently runs over IMAP"),
+        format!(
+            "{provider} native API transport is not implemented yet; it currently runs over IMAP"
+        ),
     )
 }
 

@@ -5,6 +5,7 @@
 //! into a TUI for the interactive case.
 
 mod output;
+mod watch;
 
 use std::path::{Path, PathBuf};
 
@@ -21,9 +22,8 @@ use output::Printer;
     version,
     about = "Multi-vendor email client (IMAP/SMTP today, Graph + Gmail API next)",
     long_about = "Read, sync and send mail across Gmail, Outlook, QQ, 163 and any \
-                  generic IMAP mailbox.\n\nMailboxes are configured in config.json; \
-                  secrets are read from env, keychain or an external command — never \
-                  stored next to the config."
+                  generic IMAP mailbox.\n\nMailboxes and login state are managed in \
+                  config.json, which is written with owner-only permissions."
 )]
 struct Cli {
     /// Path to config.json (default: $EEEEMAIL_CONFIG or the platform config dir).
@@ -61,8 +61,14 @@ enum Command {
     /// List configured accounts.
     Accounts,
 
-    /// Check connectivity and credentials for every account.
+    /// Check connectivity and credentials for every account (or one with -a).
     Doctor,
+
+    /// Run the read-first MCP tool server on stdio.
+    Agent,
+
+    /// Complete OAuth2 device login and store the refresh token.
+    Login,
 
     /// Refresh mail into the local database.
     Sync {
@@ -72,6 +78,25 @@ enum Command {
         /// Only this folder (role name, remote name, or id prefix).
         #[arg(long)]
         folder: Option<String>,
+    },
+
+    /// Watch accounts by polling and emit persistent new-mail events.
+    Watch {
+        /// Override config watch.interval_secs.
+        #[arg(long, value_name = "SECONDS")]
+        interval: Option<u64>,
+        /// Override config watch.webhook.
+        #[arg(long, value_name = "URL")]
+        webhook: Option<String>,
+        /// Override config watch.notify.
+        #[arg(long)]
+        notify: bool,
+        /// Emit MCP logging notifications as newline-delimited JSON-RPC.
+        #[arg(long)]
+        mcp: bool,
+        /// Include text and HTML bodies in events.
+        #[arg(long)]
+        include_body: bool,
     },
 
     /// List folders.
@@ -176,6 +201,10 @@ enum Command {
 }
 
 fn main() {
+    // Load ./.env (current directory only) so EEEEMAIL_CONFIG and SecretRef
+    // env passwords can live there; existing process env always wins.
+    let _ = dotenvy::from_filename(".env");
+
     let cli = Cli::parse();
     init_logging(cli.verbose);
 
@@ -200,8 +229,12 @@ fn run(cli: Cli) -> Result<()> {
 
     let config_path = cli.config.clone().unwrap_or_else(default_config_path);
     let config = load_config(&config_path)?;
-    let app = App::new(config)
-        .with_context(|| format!("cannot open the local database (config: {})", config_path.display()))?;
+    let app = App::new(config).with_context(|| {
+        format!(
+            "cannot open the local database (config: {})",
+            config_path.display()
+        )
+    })?;
 
     let command = cli.command.unwrap_or(Command::Tui);
     let selector = cli.account.as_deref();
@@ -209,8 +242,28 @@ fn run(cli: Cli) -> Result<()> {
     match command {
         Command::Init { .. } => unreachable!("handled above"),
         Command::Accounts => cmd_accounts(&app, &out),
-        Command::Doctor => cmd_doctor(&app, &out),
+        Command::Doctor => cmd_doctor(&app, selector, &out),
+        Command::Agent => eeeemail_agent::run(app, &config_path),
+        Command::Login => cmd_login(&app, &config_path, selector, &out),
         Command::Sync { full, folder } => cmd_sync(&app, selector, full, folder.as_deref(), &out),
+        Command::Watch {
+            interval,
+            webhook,
+            notify,
+            mcp,
+            include_body,
+        } => watch::run(
+            &app,
+            selector,
+            watch::Options {
+                interval,
+                webhook,
+                notify,
+                mcp,
+                include_body,
+                json: out.is_json(),
+            },
+        ),
         Command::Folders { refresh } => cmd_folders(&app, selector, refresh, &out),
         Command::List {
             folder,
@@ -290,9 +343,14 @@ fn load_config(path: &Path) -> Result<AppConfig> {
 // --- commands -------------------------------------------------------------
 
 fn cmd_init(path: Option<&Path>, force: bool, out: &Printer) -> Result<()> {
-    let path = path.map(|p| p.to_path_buf()).unwrap_or_else(default_config_path);
+    let path = path
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(default_config_path);
     if path.exists() && !force {
-        bail!("{} already exists (use --force to overwrite)", path.display());
+        bail!(
+            "{} already exists (use --force to overwrite)",
+            path.display()
+        );
     }
     let config = eeeemail_config::example_config();
     config.save(&path)?;
@@ -323,7 +381,7 @@ fn cmd_accounts(app: &App, out: &Printer) -> Result<()> {
         .map(|a| {
             vec![
                 a.email.clone(),
-                a.provider.clone(),
+                a.provider.to_string(),
                 a.auth_type.to_string(),
                 short_id(&a.id),
             ]
@@ -333,16 +391,16 @@ fn cmd_accounts(app: &App, out: &Printer) -> Result<()> {
     Ok(())
 }
 
-fn cmd_doctor(app: &App, out: &Printer) -> Result<()> {
+fn cmd_doctor(app: &App, selector: Option<&str>, out: &Printer) -> Result<()> {
     let mut rows: Vec<Vec<String>> = Vec::new();
     let mut ok = true;
 
-    for cfg in app.account_configs().iter() {
+    for cfg in accounts_to_sync(app, selector)? {
         let account = cfg.to_account();
-        match app.provider(cfg).and_then(|p| p.test_connection()) {
+        match app.provider(&cfg).and_then(|p| p.test_connection()) {
             Ok(detail) => rows.push(vec![
                 cfg.alias().to_string(),
-                account.provider.clone(),
+                account.provider.to_string(),
                 "ok".to_string(),
                 detail,
             ]),
@@ -350,7 +408,7 @@ fn cmd_doctor(app: &App, out: &Printer) -> Result<()> {
                 ok = false;
                 rows.push(vec![
                     cfg.alias().to_string(),
-                    account.provider.clone(),
+                    account.provider.to_string(),
                     "FAIL".to_string(),
                     format!("{}: {}", e.code, e.message),
                 ]);
@@ -383,7 +441,9 @@ fn cmd_sync(
         let report = match only_folder {
             Some(hint) => {
                 let folder = app.mail().resolve_folder(&cfg, hint)?;
-                let result = app.sync().sync_folder(&*provider, &account.id, &folder, full)?;
+                let result = app
+                    .sync()
+                    .sync_folder(&*provider, &account.id, &folder, full)?;
                 let mut r = eeeemail_core::SyncReport::new(&account.id);
                 r.folders.push(result);
                 r
@@ -423,11 +483,23 @@ fn cmd_sync(
     Ok(())
 }
 
+fn cmd_login(app: &App, config_path: &Path, selector: Option<&str>, out: &Printer) -> Result<()> {
+    let cfg = app.resolve_account(selector)?;
+    let login = eeeemail_provider::auth::login_device_code(&cfg, |prompt| {
+        eprintln!("Open: {}", prompt.verification_uri);
+        eprintln!("Code: {}", prompt.user_code);
+    })?;
+    AppConfig::store_refresh_token(config_path, &cfg.email, &login.refresh_token)?;
+    out.kv("stored", &config_path.display().to_string());
+    Ok(())
+}
+
 fn cmd_folders(app: &App, selector: Option<&str>, refresh: bool, out: &Printer) -> Result<()> {
     for cfg in accounts_to_sync(app, selector)? {
         let account = cfg.to_account();
         let folders = if refresh {
-            app.sync().refresh_folders(&*app.provider(&cfg)?, &account.id)?;
+            app.sync()
+                .refresh_folders(&*app.provider(&cfg)?, &account.id)?;
             app.mail().folders(&account.id)?
         } else {
             app.mail().ensure_folders(&cfg)?
@@ -480,7 +552,11 @@ fn cmd_list(
         .iter()
         .map(|m| {
             vec![
-                if m.is_read { " ".to_string() } else { "*".to_string() },
+                if m.is_read {
+                    " ".to_string()
+                } else {
+                    "*".to_string()
+                },
                 short_id(&m.id),
                 format_date(m.sort_ts()),
                 truncate(&m.sender().display(), 22),
@@ -509,7 +585,10 @@ fn cmd_read(
         return Ok(());
     }
 
-    println!("From:    {}", eeeemail_domain::join_addresses(&message.from));
+    println!(
+        "From:    {}",
+        eeeemail_domain::join_addresses(&message.from)
+    );
     if !message.to.is_empty() {
         println!("To:      {}", eeeemail_domain::join_addresses(&message.to));
     }
@@ -640,7 +719,10 @@ fn cmd_move(
     let account = cfg.to_account();
     let message = app.mail().resolve_message(&account.id, id)?;
     let target = app.mail().move_to(&cfg, &message.id, folder_hint)?;
-    out.kv("moved", &format!("{} -> {}", short_id(&message.id), target.name));
+    out.kv(
+        "moved",
+        &format!("{} -> {}", short_id(&message.id), target.name),
+    );
     Ok(())
 }
 
@@ -693,7 +775,8 @@ fn cmd_send(
     compose.text_body = Some(append_signature(app, text));
 
     for path in attach {
-        let data = std::fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
+        let data =
+            std::fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
         let filename = path
             .file_name()
             .map(|n| n.to_string_lossy().to_string())

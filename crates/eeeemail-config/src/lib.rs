@@ -15,8 +15,9 @@ pub mod secret;
 pub use presets::ProviderPreset;
 pub use secret::SecretRef;
 
-use eeeemail_domain::{Account, AccountId, AuthType, MailError, MailErrorCode, Result};
+use eeeemail_domain::{Account, AccountId, AuthType, MailError, MailErrorCode, ProviderId, Result};
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -45,6 +46,7 @@ pub struct GeneralConfig {
     /// Overrides the platform data directory (SQLite db, attachment cache).
     pub data_dir: Option<PathBuf>,
     pub sync: SyncConfig,
+    pub watch: WatchConfig,
     pub compose: ComposeConfig,
 }
 
@@ -53,7 +55,29 @@ impl Default for GeneralConfig {
         Self {
             data_dir: None,
             sync: SyncConfig::default(),
+            watch: WatchConfig::default(),
             compose: ComposeConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WatchConfig {
+    /// Poll interval in seconds.
+    pub interval_secs: u64,
+    /// Optional HTTP POST endpoint receiving new-mail JSON events.
+    pub webhook: Option<String>,
+    /// Send a desktop notification for each new mail event.
+    pub notify: bool,
+}
+
+impl Default for WatchConfig {
+    fn default() -> Self {
+        Self {
+            interval_secs: 300,
+            webhook: None,
+            notify: false,
         }
     }
 }
@@ -114,7 +138,7 @@ pub struct AccountConfig {
     pub display_name: Option<String>,
     /// Force a provider: `generic-imap` | `google` | `microsoft`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
+    pub provider: Option<ProviderId>,
     pub auth: AuthConfig,
     /// Explicit IMAP endpoint; merged over the provider preset.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -125,6 +149,9 @@ pub struct AccountConfig {
     /// Force folder roles when SPECIAL-USE and the name heuristic both fail.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folders: Option<FolderOverrides>,
+    /// Runtime-only origin of this account; used to persist rotated OAuth tokens.
+    #[serde(skip)]
+    pub source_path: Option<PathBuf>,
 }
 
 impl AccountConfig {
@@ -138,7 +165,7 @@ impl AccountConfig {
     }
 
     /// Local account id, stable across restarts.
-    pub fn account_id(&self, provider: &str) -> AccountId {
+    pub fn account_id(&self, provider: ProviderId) -> AccountId {
         Account::deterministic_id(provider, &self.email)
     }
 
@@ -180,30 +207,30 @@ impl AccountConfig {
     }
 
     /// Provider key, see `eeeemail_provider::registry::detect_provider`.
-    pub fn provider_key(&self) -> String {
+    pub fn provider_key(&self) -> ProviderId {
         if let Some(p) = &self.provider {
-            return p.clone();
+            return *p;
         }
         // An explicitly configured IMAP endpoint means "just do IMAP", even for
         // gmail.com / outlook.com addresses.
         if self.imap.is_some() || self.smtp.is_some() {
-            return "generic-imap".to_string();
+            return ProviderId::GenericImap;
         }
         if let Some(preset) = presets::detect(&self.email) {
             // Only route to a native API provider when OAuth2 is configured —
             // otherwise the password/app-password path must use IMAP.
-            if preset.provider != "generic-imap" && self.auth_type() == AuthType::OAuth2 {
-                return preset.provider.to_string();
+            if preset.provider != ProviderId::GenericImap && self.auth_type() == AuthType::OAuth2 {
+                return preset.provider;
             }
         }
-        "generic-imap".to_string()
+        ProviderId::GenericImap
     }
 
     /// Materialise the local `Account` row (no secrets attached).
     pub fn to_account(&self) -> Account {
         let provider = self.provider_key();
-        let mut account = Account::new(&provider, &self.email, self.auth_type());
-        account.id = self.account_id(&provider);
+        let mut account = Account::new(provider, &self.email, self.auth_type());
+        account.id = self.account_id(provider);
         account.display_name = self.display_name.clone();
         account
     }
@@ -298,10 +325,9 @@ pub enum AuthConfig {
     },
     /// OAuth 2.0.
     ///
-    /// Phase 1 ships the two shapes that work without a full
-    /// authorization-code + PKCE daemon: a pre-provisioned access token, or a
-    /// command that prints one. The redirect/refresh flow plugs into the same
-    /// `AuthProvider` trait later without touching the mail layer.
+    /// Supports a pre-provisioned access token, a command that prints one, or
+    /// refresh credentials. The provider layer refreshes and caches tokens.
+    #[serde(rename = "oauth2", alias = "o_auth2")]
     OAuth2 {
         #[serde(skip_serializing_if = "Option::is_none")]
         username: Option<String>,
@@ -318,6 +344,9 @@ pub enum AuthConfig {
         refresh_token: Option<SecretRef>,
         #[serde(skip_serializing_if = "Option::is_none")]
         token_endpoint: Option<String>,
+        /// Space-separated OAuth scopes requested by `eeeemail login`.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        scopes: Option<Vec<String>>,
     },
 }
 
@@ -363,7 +392,7 @@ impl AuthConfig {
                     Some(token) => token.resolve(),
                     None => Err(MailError::new(
                         MailErrorCode::AuthenticationRequired,
-                        "oauth2 account needs `access_token` or `token_command`",
+                        "oauth2 account needs `access_token`, `token_command`, or `eeeemail login`",
                     )),
                 }
             }
@@ -387,14 +416,22 @@ impl AuthConfig {
             AuthConfig::OAuth2 {
                 access_token,
                 token_command,
+                client_id,
+                client_secret: _,
+                refresh_token,
+                token_endpoint,
                 ..
             } => {
                 let has_token = access_token.as_ref().is_some_and(|s| s.has_value());
-                if token_command.is_none() && !has_token {
+                let can_refresh = client_id.is_some()
+                    && token_endpoint.is_some()
+                    && refresh_token.as_ref().is_some_and(|s| s.has_value());
+                let can_login = client_id.is_some() && token_endpoint.is_some();
+                if token_command.is_none() && !has_token && !can_refresh && !can_login {
                     return Err(MailError::new(
                         MailErrorCode::InvalidConfig,
                         format!(
-                            "account `{alias}` is oauth2 but has neither `access_token` nor `token_command`"
+                            "account `{alias}` is oauth2 but has none of `access_token`, `token_command`, refresh credentials, or `client_id` + `token_endpoint` for login"
                         ),
                     ));
                 }
@@ -431,12 +468,15 @@ impl AppConfig {
                 format!("cannot read config {}: {e}", path.display()),
             )
         })?;
-        let config: AppConfig = serde_json::from_str(&raw).map_err(|e| {
+        let mut config: AppConfig = serde_json::from_str(&raw).map_err(|e| {
             MailError::new(
                 MailErrorCode::InvalidConfig,
                 format!("invalid config {}: {e}", path.display()),
             )
         })?;
+        for account in &mut config.accounts {
+            account.source_path = Some(path.to_path_buf());
+        }
         for account in &config.accounts {
             account.validate()?;
         }
@@ -454,12 +494,61 @@ impl AppConfig {
         }
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| MailError::new(MailErrorCode::InvalidConfig, e.to_string()))?;
-        std::fs::write(path, json).map_err(|e| {
+        #[cfg(unix)]
+        if path.exists() {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).map_err(
+                |e| {
+                    MailError::new(
+                        MailErrorCode::InvalidConfig,
+                        format!("cannot secure {}: {e}", path.display()),
+                    )
+                },
+            )?;
+        }
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(path).map_err(|e| {
             MailError::new(
                 MailErrorCode::InvalidConfig,
                 format!("cannot write {}: {e}", path.display()),
             )
-        })
+        })?;
+        file.write_all(json.as_bytes()).map_err(|e| {
+            MailError::new(
+                MailErrorCode::InvalidConfig,
+                format!("cannot write {}: {e}", path.display()),
+            )
+        })?;
+        Ok(())
+    }
+
+    /// Replace one account's refresh token and save the whole JSON config.
+    pub fn store_refresh_token(path: &Path, email: &str, token: &str) -> Result<()> {
+        let mut config = AppConfig::load(path)?;
+        let account = config
+            .accounts
+            .iter_mut()
+            .find(|account| account.email == email)
+            .ok_or_else(|| {
+                MailError::new(
+                    MailErrorCode::InvalidConfig,
+                    format!("account `{email}` disappeared from {}", path.display()),
+                )
+            })?;
+        let AuthConfig::OAuth2 { refresh_token, .. } = &mut account.auth else {
+            return Err(MailError::new(
+                MailErrorCode::InvalidConfig,
+                format!("account `{email}` is not configured for oauth2"),
+            ));
+        };
+        *refresh_token = Some(SecretRef::Plain(token.to_string()));
+        config.save(path)
     }
 
     pub fn find(&self, selector: &str) -> Option<&AccountConfig> {
@@ -470,7 +559,10 @@ impl AppConfig {
 
     /// Data directory for the SQLite database and attachment cache.
     pub fn data_dir(&self) -> PathBuf {
-        self.general.data_dir.clone().unwrap_or_else(default_data_dir)
+        self.general
+            .data_dir
+            .clone()
+            .unwrap_or_else(default_data_dir)
     }
 
     /// External editor: explicit config, then `$VISUAL`, then `$EDITOR`.
@@ -519,7 +611,7 @@ mod tests {
     fn example_config_is_valid() {
         let cfg = example_config();
         assert_eq!(cfg.accounts.len(), 3);
-        assert_eq!(cfg.accounts[0].provider_key(), "generic-imap");
+        assert_eq!(cfg.accounts[0].provider_key(), ProviderId::GenericImap);
     }
 
     #[test]
@@ -534,6 +626,18 @@ mod tests {
     }
 
     #[test]
+    fn outlook_consumer_uses_official_smtp_host() {
+        let cfg: AppConfig = serde_json::from_str(
+            r#"{"accounts":[{"email":"a@outlook.com","auth":{"type":"oauth2","client_id":"c","refresh_token":"r","token_endpoint":"https://login.microsoftonline.com/consumers/oauth2/v2.0/token"}}]}"#,
+        )
+        .unwrap();
+        let acc = &cfg.accounts[0];
+        assert_eq!(acc.imap_server().host, "outlook.office365.com");
+        assert_eq!(acc.smtp_server().host, "smtp-mail.outlook.com");
+        assert_eq!(acc.smtp_server().port, 587);
+    }
+
+    #[test]
     fn explicit_hosts_beat_presets() {
         let cfg: AppConfig = serde_json::from_str(
             r#"{"accounts":[{
@@ -545,6 +649,84 @@ mod tests {
         .unwrap();
         let acc = &cfg.accounts[0];
         assert_eq!(acc.imap_server().host, "mail.internal");
-        assert_eq!(acc.provider_key(), "generic-imap");
+        assert_eq!(acc.provider_key(), ProviderId::GenericImap);
+    }
+
+    #[test]
+    fn refresh_credentials_are_sufficient_for_oauth2() {
+        let cfg: AppConfig = serde_json::from_str(
+            r#"{"accounts":[{
+                "email":"funzm@outlook.com",
+                "auth":{
+                    "type":"oauth2",
+                    "client_id":"client",
+                    "refresh_token":"refresh",
+                    "token_endpoint":"https://example.com/token",
+                    "scopes":["offline_access"]
+                }
+            }]}"#,
+        )
+        .unwrap();
+
+        cfg.accounts[0]
+            .validate()
+            .expect("refresh-only oauth2 is valid");
+    }
+
+    #[test]
+    fn oauth2_login_credentials_are_sufficient_before_first_login() {
+        let cfg: AppConfig = serde_json::from_str(
+            r#"{"accounts":[{
+                "email":"funzm@outlook.com",
+                "auth":{
+                    "type":"oauth2",
+                    "client_id":"client",
+                    "token_endpoint":"https://example.com/token"
+                }
+            }]}"#,
+        )
+        .unwrap();
+
+        cfg.accounts[0]
+            .validate()
+            .expect("login-only oauth2 is valid");
+    }
+
+    #[test]
+    fn refresh_token_is_stored_in_the_selected_json_account() {
+        let path = std::env::temp_dir().join(format!(
+            "eeeemail-config-{}.json",
+            eeeemail_domain::new_id()
+        ));
+        let config: AppConfig = serde_json::from_str(
+            r#"{"accounts":[
+                {"email":"a@example.com","auth":{"type":"oauth2","client_id":"a","token_endpoint":"https://a/token"}},
+                {"email":"b@example.com","auth":{"type":"oauth2","client_id":"b","token_endpoint":"https://b/token"}}
+            ]}"#,
+        )
+        .unwrap();
+        config.save(&path).unwrap();
+
+        AppConfig::store_refresh_token(&path, "b@example.com", "rotated").unwrap();
+
+        let loaded = AppConfig::load(&path).unwrap();
+        assert!(matches!(
+            &loaded.accounts[1].auth,
+            AuthConfig::OAuth2 { refresh_token: Some(SecretRef::Plain(token)), .. } if token == "rotated"
+        ));
+        assert!(matches!(
+            &loaded.accounts[0].auth,
+            AuthConfig::OAuth2 {
+                refresh_token: None,
+                ..
+            }
+        ));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+        let _ = std::fs::remove_file(&path);
     }
 }

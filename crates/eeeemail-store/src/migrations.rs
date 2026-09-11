@@ -19,7 +19,7 @@ use eeeemail_domain::{MailError, MailErrorCode, Result};
 use rusqlite::Connection;
 
 /// Current `PRAGMA user_version`. Bump whenever a `SCHEMA_V*` block is added.
-pub const LATEST_VERSION: u32 = 1;
+pub const LATEST_VERSION: u32 = 2;
 
 /// Everything needed to create a database from scratch.
 const SCHEMA_V1: &str = r#"
@@ -159,6 +159,19 @@ CREATE INDEX IF NOT EXISTS idx_attachments_msg  ON attachments(message_id);
 CREATE INDEX IF NOT EXISTS idx_outbox_status    ON outbox(status);
 "#;
 
+const SCHEMA_V2: &str = r#"
+CREATE TABLE IF NOT EXISTS mail_events (
+    id           TEXT PRIMARY KEY,
+    account_id   TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    message_id   TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    detected_at  INTEGER NOT NULL,
+    delivered_at INTEGER,
+    UNIQUE (message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mail_events_pending ON mail_events(delivered_at, detected_at);
+"#;
+
 /// Apply any outstanding migrations.
 ///
 /// Runs inside a single transaction so an interrupted upgrade cannot leave a
@@ -178,6 +191,9 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
     if current < 1 {
         tx.execute_batch(SCHEMA_V1).map_err(db_err)?;
     }
+    if current < 2 {
+        tx.execute_batch(SCHEMA_V2).map_err(db_err)?;
+    }
     tx.pragma_update(None, "user_version", LATEST_VERSION)
         .map_err(db_err)?;
     tx.commit().map_err(db_err)?;
@@ -188,4 +204,36 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
 /// Normalise any SQLite failure into the unified error model.
 pub(crate) fn db_err(err: rusqlite::Error) -> MailError {
     MailError::new(MailErrorCode::Storage, err.to_string()).with_source(err)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn upgrades_v1_databases_to_mail_events() {
+        let db = crate::Database::open_in_memory().unwrap();
+        {
+            let mut conn = db.lock();
+            conn.execute_batch(
+                "DROP TABLE mail_events;
+                 PRAGMA user_version = 1;",
+            )
+            .map_err(db_err)
+            .unwrap();
+            migrate(&mut conn).unwrap();
+            let version: u32 = conn
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(version, 2);
+            let columns: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info('mail_events')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(columns, 5);
+        }
+    }
 }

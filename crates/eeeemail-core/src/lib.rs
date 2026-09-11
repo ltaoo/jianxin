@@ -29,7 +29,7 @@ use eeeemail_provider::{MailProvider, ProviderRegistry};
 use eeeemail_store::Database;
 
 pub use compose::ComposeService;
-pub use mail::MailService;
+pub use mail::{MailService, ThreadDetail};
 pub use sync::{SyncEngine, SyncReport};
 
 /// Wires together config, storage and providers.
@@ -87,6 +87,13 @@ impl App {
         &self.config.accounts
     }
 
+    /// Replace the in-memory config after an account-management tool edits it.
+    pub fn reload_config(&mut self, config: AppConfig) -> Result<Vec<Account>> {
+        self.config = config;
+        self.providers.write().unwrap().clear();
+        self.import_accounts()
+    }
+
     /// Copy configured accounts into the local database.
     ///
     /// Ids are deterministic (`provider + email`), so re-running this never
@@ -125,18 +132,27 @@ impl App {
     /// `None` and there is exactly one — the only account.
     pub fn resolve_account(&self, selector: Option<&str>) -> Result<AccountConfig> {
         match selector {
-            Some(s) => self.config.find(s).cloned().ok_or_else(|| {
-                MailError::new(
-                    MailErrorCode::InvalidConfig,
-                    format!(
-                        "no account matching `{s}` (known: {})",
-                        self.known_aliases()
-                    ),
-                )
-            }),
-            None if self.config.accounts.len() == 1 => {
-                Ok(self.config.accounts[0].clone())
-            }
+            Some(s) => self
+                .config
+                .find(s)
+                .cloned()
+                .or_else(|| {
+                    self.config
+                        .accounts
+                        .iter()
+                        .find(|cfg| cfg.to_account().id == s)
+                        .cloned()
+                })
+                .ok_or_else(|| {
+                    MailError::new(
+                        MailErrorCode::InvalidConfig,
+                        format!(
+                            "no account matching `{s}` (known: {})",
+                            self.known_aliases()
+                        ),
+                    )
+                }),
+            None if self.config.accounts.len() == 1 => Ok(self.config.accounts[0].clone()),
             None => Err(MailError::new(
                 MailErrorCode::InvalidConfig,
                 format!(
@@ -231,8 +247,11 @@ mod tests {
 
     #[test]
     fn imports_accounts_idempotently() {
-        let app = App::with_database(config_with("a@example.com"), Database::open_in_memory().unwrap())
-            .unwrap();
+        let app = App::with_database(
+            config_with("a@example.com"),
+            Database::open_in_memory().unwrap(),
+        )
+        .unwrap();
         app.import_accounts().unwrap();
         app.import_accounts().unwrap();
         assert_eq!(app.accounts().unwrap().len(), 1);
@@ -240,15 +259,21 @@ mod tests {
 
     #[test]
     fn resolves_single_account_without_a_selector() {
-        let app = App::with_database(config_with("a@example.com"), Database::open_in_memory().unwrap())
-            .unwrap();
+        let app = App::with_database(
+            config_with("a@example.com"),
+            Database::open_in_memory().unwrap(),
+        )
+        .unwrap();
         assert_eq!(app.resolve_account(None).unwrap().email, "a@example.com");
     }
 
     #[test]
     fn unknown_selector_lists_what_is_available() {
-        let app = App::with_database(config_with("a@example.com"), Database::open_in_memory().unwrap())
-            .unwrap();
+        let app = App::with_database(
+            config_with("a@example.com"),
+            Database::open_in_memory().unwrap(),
+        )
+        .unwrap();
         let err = app.resolve_account(Some("nope")).unwrap_err();
         assert_eq!(err.code, MailErrorCode::InvalidConfig);
         assert!(err.message.contains("a@example.com"));

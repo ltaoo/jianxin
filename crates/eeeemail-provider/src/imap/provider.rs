@@ -7,9 +7,9 @@
 
 use eeeemail_config::{AccountConfig, FolderOverrides, SyncConfig, TlsMode};
 use eeeemail_domain::{
-    Account, Address, AuthType, Capability, ComposeMessage, Folder, FolderKind, MailError,
-    MailErrorCode, Message, MessagePage, ProviderCapabilities, Result, SendResult, SyncCursor,
-    FlagUpdate,
+    Account, Address, AuthType, Capability, ComposeMessage, FlagUpdate, Folder, FolderKind,
+    MailError, MailErrorCode, Message, MessagePage, ProviderCapabilities, ProviderId, Result,
+    SendResult, SyncCursor,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -83,8 +83,7 @@ impl GenericImapProvider {
     /// Build a provider straight from a JSON account entry.
     pub fn from_config(config: &AccountConfig, sync: &SyncConfig) -> Result<Self> {
         let account = config.to_account();
-        let auth: Arc<dyn AuthProvider> =
-            Arc::new(ConfigAuth::new(config.username(), config.auth.clone()));
+        let auth: Arc<dyn AuthProvider> = Arc::new(ConfigAuth::from_account(config));
 
         let timeout = Duration::from_secs(sync.timeout_secs.max(1));
         let imap_cfg = config.imap_server();
@@ -124,6 +123,9 @@ impl GenericImapProvider {
         let raws = client.list_folders()?;
         let mut folders: Vec<Folder> = raws
             .iter()
+            // `\Noselect` entries (e.g. Gmail's `[Gmail]` namespace root)
+            // cannot be SELECTed; syncing them fails with "Unknown Mailbox".
+            .filter(|raw| !raw.attributes.split_whitespace().any(|a| a == "\\Noselect"))
             .map(|raw| folder_from_raw(raw, &self.account.id, self.folders.as_ref()))
             .collect();
 
@@ -169,8 +171,8 @@ fn rank(kind: FolderKind) -> u8 {
 }
 
 impl MailProvider for GenericImapProvider {
-    fn id(&self) -> &str {
-        "generic-imap"
+    fn id(&self) -> ProviderId {
+        ProviderId::GenericImap
     }
 
     fn account_id(&self) -> &str {
@@ -201,7 +203,11 @@ impl MailProvider for GenericImapProvider {
         uids.reverse();
 
         let start = (opts.offset as usize).min(uids.len());
-        let limit = if opts.limit == 0 { 50 } else { opts.limit as usize };
+        let limit = if opts.limit == 0 {
+            50
+        } else {
+            opts.limit as usize
+        };
         let end = (start + limit).min(uids.len());
         let page = &uids[start..end];
 
@@ -333,7 +339,11 @@ impl MailProvider for GenericImapProvider {
         }
         let criteria = criteria.join(" ");
 
-        let limit = if query.limit == 0 { 50 } else { query.limit as usize };
+        let limit = if query.limit == 0 {
+            50
+        } else {
+            query.limit as usize
+        };
 
         // With an explicit folder we can use one connection; otherwise walk the
         // syncable folders of the account.
@@ -430,8 +440,7 @@ impl MailProvider for GenericImapProvider {
                 .join(",");
             let raws = client.fetch_messages(&set)?;
             for raw in raws {
-                let message =
-                    message_from_raw(&raw, &self.account.id, &folder.id, folder.kind)?;
+                let message = message_from_raw(&raw, &self.account.id, &folder.id, folder.kind)?;
                 delta.new_messages.push(message);
             }
         }
@@ -461,7 +470,7 @@ impl MailProvider for GenericImapProvider {
         }
 
         delta.cursor = Some(SyncCursor {
-            provider: self.id().to_string(),
+            provider: self.id(),
             account_id: self.account.id.clone(),
             folder_id: folder.id.clone(),
             cursor_type: "uid".to_string(),

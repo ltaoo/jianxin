@@ -110,9 +110,7 @@ fn print_row(cells: &[impl AsRef<str>], widths: &[usize]) {
 
 /// Characters-wide, not bytes-wide: East Asian wide glyphs take two cells.
 fn display_width(s: &str) -> usize {
-    s.chars()
-        .map(|c| if is_wide(c) { 2 } else { 1 })
-        .sum()
+    s.chars().map(|c| if is_wide(c) { 2 } else { 1 }).sum()
 }
 
 fn is_wide(c: char) -> bool {

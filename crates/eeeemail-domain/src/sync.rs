@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// from assuming `nextPageToken` semantics everywhere.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncCursor {
-    pub provider: String,
+    pub provider: crate::ProviderId,
     pub account_id: String,
     pub folder_id: String,
     /// e.g. `uid`, `delta_link`, `history_id`.

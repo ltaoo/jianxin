@@ -13,11 +13,11 @@
 //! below reflects what this transport can actually do right now.
 
 use eeeemail_config::{AccountConfig, SyncConfig};
-use eeeemail_domain::{Capability, ProviderCapabilities, Result};
+use eeeemail_domain::{Capability, ProviderCapabilities, ProviderId, Result};
 
 use crate::branded::BrandedProvider;
 
-pub const ID: &str = "microsoft";
+pub const ID: ProviderId = ProviderId::Microsoft;
 
 pub const NOTE: &str = "Outlook over IMAP + XOAUTH2 (Microsoft Graph transport: Phase 2)";
 

@@ -16,17 +16,19 @@ pub mod compose;
 pub mod error;
 pub mod folder;
 pub mod message;
+pub mod provider;
 pub mod sync;
 pub mod thread;
 
 pub use account::{Account, AccountId, AuthType};
-pub use address::{parse_address_list, join_addresses, Address};
+pub use address::{join_addresses, parse_address_list, Address};
 pub use attachment::Attachment;
 pub use capability::{Capability, ProviderCapabilities};
 pub use compose::{ComposeAttachment, ComposeMessage, SendResult};
 pub use error::{MailError, MailErrorCode, Result};
 pub use folder::{Folder, FolderId, FolderKind};
 pub use message::{Message, MessageId, MessagePage};
+pub use provider::ProviderId;
 pub use sync::{FlagUpdate, SyncCursor, SyncResult};
 pub use thread::{Thread, ThreadId};
 

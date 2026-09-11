@@ -5,12 +5,13 @@
 //! listed here is reachable today through generic IMAP + SMTP (163, 126, QQ,
 //! aliyun, Tencent, Zoho, self-hosted, …).
 
+use eeeemail_domain::ProviderId;
+
 use crate::{ServerConfig, TlsMode};
 
 #[derive(Debug, Clone)]
 pub struct ProviderPreset {
-    /// Provider key: `generic-imap`, `google`, `microsoft`.
-    pub provider: &'static str,
+    pub provider: ProviderId,
     pub imap: ServerConfig,
     pub smtp: ServerConfig,
 }
@@ -43,7 +44,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "gmail.com",
             preset!(
-                "google",
+                ProviderId::Google,
                 "imap.gmail.com",
                 993,
                 TlsMode::Tls,
@@ -55,7 +56,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "googlemail.com",
             preset!(
-                "google",
+                ProviderId::Google,
                 "imap.gmail.com",
                 993,
                 TlsMode::Tls,
@@ -68,11 +69,11 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "outlook.com",
             preset!(
-                "microsoft",
+                ProviderId::Microsoft,
                 "outlook.office365.com",
                 993,
                 TlsMode::Tls,
-                "smtp.office365.com",
+                "smtp-mail.outlook.com",
                 587,
                 TlsMode::StartTls
             ),
@@ -80,11 +81,11 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "hotmail.com",
             preset!(
-                "microsoft",
+                ProviderId::Microsoft,
                 "outlook.office365.com",
                 993,
                 TlsMode::Tls,
-                "smtp.office365.com",
+                "smtp-mail.outlook.com",
                 587,
                 TlsMode::StartTls
             ),
@@ -92,11 +93,11 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "live.com",
             preset!(
-                "microsoft",
+                ProviderId::Microsoft,
                 "outlook.office365.com",
                 993,
                 TlsMode::Tls,
-                "smtp.office365.com",
+                "smtp-mail.outlook.com",
                 587,
                 TlsMode::StartTls
             ),
@@ -104,11 +105,11 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "office365.com",
             preset!(
-                "microsoft",
+                ProviderId::Microsoft,
                 "outlook.office365.com",
                 993,
                 TlsMode::Tls,
-                "smtp.office365.com",
+                "smtp-mail.outlook.com",
                 587,
                 TlsMode::StartTls
             ),
@@ -117,7 +118,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "qq.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.qq.com",
                 993,
                 TlsMode::Tls,
@@ -129,7 +130,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "foxmail.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.qq.com",
                 993,
                 TlsMode::Tls,
@@ -141,7 +142,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "163.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.163.com",
                 993,
                 TlsMode::Tls,
@@ -153,7 +154,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "126.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.126.com",
                 993,
                 TlsMode::Tls,
@@ -165,7 +166,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "yeah.net",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.yeah.net",
                 993,
                 TlsMode::Tls,
@@ -177,7 +178,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "aliyun.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.aliyun.com",
                 993,
                 TlsMode::Tls,
@@ -189,7 +190,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "sina.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.sina.com",
                 993,
                 TlsMode::Tls,
@@ -201,7 +202,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "139.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.139.com",
                 993,
                 TlsMode::Tls,
@@ -214,7 +215,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "icloud.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.mail.me.com",
                 993,
                 TlsMode::Tls,
@@ -226,7 +227,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "me.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.mail.me.com",
                 993,
                 TlsMode::Tls,
@@ -238,7 +239,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "zoho.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.zoho.com",
                 993,
                 TlsMode::Tls,
@@ -250,7 +251,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "yahoo.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.mail.yahoo.com",
                 993,
                 TlsMode::Tls,
@@ -262,7 +263,7 @@ fn table() -> Vec<(&'static str, ProviderPreset)> {
         (
             "fastmail.com",
             preset!(
-                "generic-imap",
+                ProviderId::GenericImap,
                 "imap.fastmail.com",
                 993,
                 TlsMode::Tls,

@@ -5,7 +5,7 @@
 //! if the server rejected the change, showing it locally would be a lie.
 
 use eeeemail_config::AccountConfig;
-use eeeemail_domain::{Capability, Folder, FolderId, Message, Result};
+use eeeemail_domain::{Capability, Folder, Message, Result, Thread};
 use eeeemail_provider::SearchQuery;
 use eeeemail_store as store;
 
@@ -13,6 +13,13 @@ use crate::App;
 
 pub struct MailService<'a> {
     app: &'a App,
+}
+
+/// A thread plus its messages, oldest first.
+#[derive(Debug, Clone)]
+pub struct ThreadDetail {
+    pub thread: Thread,
+    pub messages: Vec<Message>,
 }
 
 impl<'a> MailService<'a> {
@@ -34,7 +41,9 @@ impl<'a> MailService<'a> {
         if !existing.is_empty() {
             return Ok(existing);
         }
-        self.app.sync().refresh_folders(&*self.app.provider(cfg)?, &account.id)?;
+        self.app
+            .sync()
+            .refresh_folders(&*self.app.provider(cfg)?, &account.id)?;
         self.folders(&account.id)
     }
 
@@ -200,8 +209,7 @@ impl<'a> MailService<'a> {
         let conn = self.app.db().lock();
         let mut out = Vec::new();
         for folder in folders {
-            let mut page =
-                store::message_repo::list(&conn, &folder.id, limit, 0, true)?;
+            let mut page = store::message_repo::list(&conn, &folder.id, limit, 0, true)?;
             out.append(&mut page);
         }
         out.sort_by(|a, b| b.sort_ts().cmp(&a.sort_ts()));
@@ -236,12 +244,36 @@ impl<'a> MailService<'a> {
             )),
         }
     }
+
+    /// Load one locally grouped conversation, oldest message first.
+    pub fn thread(&self, account_id: &str, thread_id: &str) -> Result<ThreadDetail> {
+        let conn = self.app.db().lock();
+        let thread = store::thread_repo::get(&conn, thread_id)?
+            .filter(|thread| thread.account_id == account_id)
+            .ok_or_else(|| {
+                eeeemail_domain::MailError::new(
+                    eeeemail_domain::MailErrorCode::MessageNotFound,
+                    format!("no local thread with id {thread_id}"),
+                )
+            })?;
+        let mut messages = Vec::new();
+        for id in store::thread_repo::message_ids(&conn, thread_id)? {
+            let message = store::message_repo::get(&conn, &id)?.ok_or_else(|| {
+                eeeemail_domain::MailError::new(
+                    eeeemail_domain::MailErrorCode::MessageNotFound,
+                    format!("thread {thread_id} points at missing message {id}"),
+                )
+            })?;
+            messages.push(message);
+        }
+        Ok(ThreadDetail { thread, messages })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eeeemail_domain::{Address, FolderKind, Message};
+    use eeeemail_domain::{Address, FolderId, FolderKind, Message};
 
     fn app_with(email: &str) -> App {
         let json = serde_json::json!({
@@ -257,7 +289,7 @@ mod tests {
     fn seed(app: &App, folder_remote: &str, kind: FolderKind, subjects: &[&str]) -> FolderId {
         let conn = app.db().lock();
         let mut a = eeeemail_domain::Account::new(
-            "generic-imap",
+            eeeemail_domain::ProviderId::GenericImap,
             "a@example.com",
             eeeemail_domain::AuthType::Password,
         );
@@ -300,7 +332,12 @@ mod tests {
     fn marks_read_locally_without_a_provider() {
         let app = app_with("a@example.com");
         let folder = seed(&app, "INBOX", FolderKind::Inbox, &["a"]);
-        let m = app.mail().list(&folder, 10, 0, true).unwrap().pop().unwrap();
+        let m = app
+            .mail()
+            .list(&folder, 10, 0, true)
+            .unwrap()
+            .pop()
+            .unwrap();
         assert!(!m.is_read);
 
         // No provider needed: the capability gate means offline flag edits are
@@ -315,7 +352,10 @@ mod tests {
         let folder = seed(&app, "INBOX", FolderKind::Inbox, &["a", "b"]);
         let all = app.mail().list(&folder, 10, 0, false).unwrap();
         let prefix = &all[0].id[..8];
-        assert_eq!(app.mail().resolve_message("acc", prefix).unwrap().id, all[0].id);
+        assert_eq!(
+            app.mail().resolve_message("acc", prefix).unwrap().id,
+            all[0].id
+        );
     }
 
     #[test]

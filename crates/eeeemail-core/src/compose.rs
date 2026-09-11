@@ -46,11 +46,7 @@ impl<'a> ComposeService<'a> {
                 // Keep the provider's id so a later sync recognises the draft
                 // instead of inserting a twin.
                 message.remote_id = remote.remote_id;
-                message.id = Message::deterministic_id(
-                    &account.id,
-                    &folder.id,
-                    &message.remote_id,
-                );
+                message.id = Message::deterministic_id(&account.id, &folder.id, &message.remote_id);
             }
             Err(e) if e.code == MailErrorCode::UnsupportedFeature => {
                 tracing::debug!("provider cannot store drafts; keeping a local-only draft");
@@ -284,8 +280,8 @@ mod tests {
     }
 
     impl MailProvider for FakeSender {
-        fn id(&self) -> &str {
-            "fake"
+        fn id(&self) -> eeeemail_domain::ProviderId {
+            eeeemail_domain::ProviderId::GenericImap
         }
         fn account_id(&self) -> &str {
             &self.account_id
@@ -366,7 +362,10 @@ mod tests {
             use std::sync::Arc;
             let boxed: Box<dyn MailProvider> = Box::new(provider);
             let arc: Arc<dyn MailProvider> = Arc::from(boxed);
-            app.providers.write().unwrap().insert(account_id.clone(), arc);
+            app.providers
+                .write()
+                .unwrap()
+                .insert(account_id.clone(), arc);
         }
 
         (app, account_cfg, account_id)
@@ -404,18 +403,18 @@ mod tests {
         assert_eq!(
             app.db()
                 .lock()
-                .query_row(
-                    "SELECT status FROM outbox WHERE id = ?1",
-                    [&job.id],
-                    |r| r.get::<_, String>(0)
-                )
+                .query_row("SELECT status FROM outbox WHERE id = ?1", [&job.id], |r| {
+                    r.get::<_, String>(0)
+                })
                 .unwrap(),
             "sent"
         );
 
         // The local row moved into Sent and is no longer a draft.
         let conn = app.db().lock();
-        let m = store::message_repo::get(&conn, &job.message_id).unwrap().unwrap();
+        let m = store::message_repo::get(&conn, &job.message_id)
+            .unwrap()
+            .unwrap();
         assert!(!m.is_draft);
         assert!(m.is_read);
         let sent = store::folder_repo::find_by_kind(&conn, &account_id, FolderKind::Sent)
@@ -433,8 +432,7 @@ mod tests {
             sent: Default::default(),
         });
         let job = app.compose().queue(&cfg, &compose()).unwrap();
-        let loaded =
-            store::outbox_repo::load_payload(&app.db().lock(), &job.id).unwrap();
+        let loaded = store::outbox_repo::load_payload(&app.db().lock(), &job.id).unwrap();
         assert_eq!(loaded.attachments[0].data, b"hi".to_vec());
     }
 

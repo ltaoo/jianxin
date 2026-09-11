@@ -1,0 +1,10 @@
+{
+  "accounts": [
+    {
+      "id": "gmail",
+      "email": "funzmadmin@gmail.com",
+      "auth": { "type": "app_password", "password": { "env": "FUNZM_GMAIL_PWD" } }
+    }
+  ]
+}
+

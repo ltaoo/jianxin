@@ -24,6 +24,7 @@ pub mod account_repo;
 pub mod folder_repo;
 pub mod message_repo;
 pub mod migrations;
+pub mod mail_event_repo;
 pub mod outbox_repo;
 pub mod sync_repo;
 pub mod thread_repo;
@@ -152,7 +153,11 @@ pub(crate) mod test_util {
     /// Tests use short literal ids (`"acc"`) as foreign keys, and the schema
     /// enforces those keys, so the row has to exist with exactly that id.
     pub fn seed_account(conn: &Connection, id: &str) -> Result<()> {
-        let mut a = Account::new("generic-imap", "a@example.com", AuthType::Password);
+        let mut a = Account::new(
+            eeeemail_domain::ProviderId::GenericImap,
+            "a@example.com",
+            AuthType::Password,
+        );
         a.id = id.to_string();
         account_repo::upsert(conn, &a)
     }

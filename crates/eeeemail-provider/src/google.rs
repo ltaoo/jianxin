@@ -13,11 +13,11 @@
 //! `MailProvider` trait later.
 
 use eeeemail_config::{AccountConfig, SyncConfig};
-use eeeemail_domain::{Capability, ProviderCapabilities, Result};
+use eeeemail_domain::{Capability, ProviderCapabilities, ProviderId, Result};
 
 use crate::branded::BrandedProvider;
 
-pub const ID: &str = "google";
+pub const ID: ProviderId = ProviderId::Google;
 
 pub const NOTE: &str = "Gmail over IMAP + XOAUTH2 (Gmail API transport: Phase 2)";
 
@@ -38,8 +38,5 @@ pub fn build(config: &AccountConfig, sync: &SyncConfig) -> Result<BrandedProvide
 }
 
 /// Compile-time reminder of what is still missing, surfaced by `eeeemail doctor`.
-pub const PENDING_FEATURES: &[Capability] = &[
-    Capability::Labels,
-    Capability::Threading,
-    Capability::Push,
-];
+pub const PENDING_FEATURES: &[Capability] =
+    &[Capability::Labels, Capability::Threading, Capability::Push];

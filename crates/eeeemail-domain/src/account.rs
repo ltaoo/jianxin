@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::ProviderId;
+
 /// Local account id (UUID). Never reuse a provider id for this.
 pub type AccountId = String;
 
@@ -40,7 +42,7 @@ impl std::fmt::Display for AuthType {
 pub struct Account {
     pub id: AccountId,
     /// Provider key, e.g. `generic-imap`, `google`, `microsoft`.
-    pub provider: String,
+    pub provider: ProviderId,
     pub email: String,
     pub display_name: Option<String>,
     pub auth_type: AuthType,
@@ -49,7 +51,7 @@ pub struct Account {
 }
 
 impl Account {
-    pub fn new(provider: impl Into<String>, email: impl Into<String>, auth: AuthType) -> Self {
+    pub fn new(provider: ProviderId, email: impl Into<String>, auth: AuthType) -> Self {
         let now = crate::now_ts();
         Self {
             id: crate::new_id(),
@@ -64,10 +66,10 @@ impl Account {
 
     /// Stable-ish local id derived from provider + email, so re-importing the
     /// same JSON config does not duplicate local rows or lose the sync cursor.
-    pub fn deterministic_id(provider: &str, email: &str) -> AccountId {
+    pub fn deterministic_id(provider: ProviderId, email: &str) -> AccountId {
         use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        provider.hash(&mut hasher);
+        provider.as_str().hash(&mut hasher);
         '\u{1f}'.hash(&mut hasher);
         email.to_lowercase().hash(&mut hasher);
         let h = hasher.finish();

@@ -10,7 +10,7 @@
 
 use eeeemail_domain::{
     Capability, ComposeMessage, Folder, MailError, MailErrorCode, Message, MessagePage,
-    ProviderCapabilities, Result, SendResult, SyncCursor, SyncResult,
+    ProviderCapabilities, ProviderId, Result, SendResult, SyncCursor, SyncResult,
 };
 
 /// Re-exported so downstream modules can import flag updates from the trait
@@ -133,8 +133,7 @@ impl SyncDelta {
 /// connection. That keeps them `Send + Sync` for free, which the TUI needs in
 /// order to sync on a background thread while the UI keeps rendering.
 pub trait MailProvider: Send + Sync {
-    /// Provider key: `generic-imap`, `google`, `microsoft`.
-    fn id(&self) -> &str;
+    fn id(&self) -> ProviderId;
 
     fn account_id(&self) -> &str;
 

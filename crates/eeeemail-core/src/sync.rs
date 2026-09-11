@@ -102,10 +102,7 @@ impl<'a> SyncEngine<'a> {
             store::folder_repo::list(&conn, account_id)?
         };
 
-        for folder in folders
-            .into_iter()
-            .filter(|f| self.should_sync(f))
-        {
+        for folder in folders.into_iter().filter(|f| self.should_sync(f)) {
             match self.sync_folder(provider, account_id, &folder, full) {
                 Ok(result) => report.folders.push(result),
                 Err(e) => report.failures.push(FolderFailure {
@@ -174,12 +171,7 @@ impl<'a> SyncEngine<'a> {
     ///
     /// Runs in a single transaction: a crash between "messages inserted" and
     /// "cursor advanced" would otherwise replay the same delta forever.
-    fn apply(
-        &self,
-        account_id: &str,
-        folder: &Folder,
-        delta: &SyncDelta,
-    ) -> Result<SyncResult> {
+    fn apply(&self, account_id: &str, folder: &Folder, delta: &SyncDelta) -> Result<SyncResult> {
         let mut new_messages = delta.new_messages.clone();
 
         self.app.db().transaction(|conn| {
@@ -193,11 +185,8 @@ impl<'a> SyncEngine<'a> {
             // looking up `Message-ID` in the same batch.
             store::thread_repo::assign(conn, &account_id.to_string(), &mut new_messages)?;
 
-            let flagged = store::message_repo::apply_flag_updates(
-                conn,
-                &folder.id,
-                &delta.flag_updates,
-            )?;
+            let flagged =
+                store::message_repo::apply_flag_updates(conn, &folder.id, &delta.flag_updates)?;
 
             // Deletions. Providers with a change feed tell us directly; IMAP
             // hands back the ids it can still see and we diff locally.
@@ -208,12 +197,16 @@ impl<'a> SyncEngine<'a> {
                     &delta.removed_remote_ids,
                 )?
             } else if !delta.present_remote_ids.is_empty() {
-                let present: HashSet<&str> =
-                    delta.present_remote_ids.iter().map(|s| s.as_str()).collect();
-                let stale: Vec<String> = store::message_repo::remote_ids_in_folder(conn, &folder.id)?
-                    .into_iter()
-                    .filter(|id| !present.contains(id.as_str()))
+                let present: HashSet<&str> = delta
+                    .present_remote_ids
+                    .iter()
+                    .map(|s| s.as_str())
                     .collect();
+                let stale: Vec<String> =
+                    store::message_repo::remote_ids_in_folder(conn, &folder.id)?
+                        .into_iter()
+                        .filter(|id| !present.contains(id.as_str()))
+                        .collect();
                 store::message_repo::remove_by_remote_ids(conn, &folder.id, &stale)?
             } else {
                 0
@@ -244,11 +237,7 @@ impl<'a> SyncEngine<'a> {
     /// Re-list folders remotely and reconcile with the local rows.
     ///
     /// Returns whether the set of folders changed.
-    pub fn refresh_folders(
-        &self,
-        provider: &dyn MailProvider,
-        account_id: &str,
-    ) -> Result<bool> {
+    pub fn refresh_folders(&self, provider: &dyn MailProvider, account_id: &str) -> Result<bool> {
         let remote = provider.list_folders()?;
 
         self.app.db().transaction(|conn| {
@@ -296,11 +285,11 @@ const MAX_PAGES: usize = 200;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use eeeemail_domain::MailErrorCode;
     use eeeemail_domain::{
         Address, Capability, ComposeMessage, FolderKind, Message, MessagePage,
         ProviderCapabilities, SendResult,
     };
-    use eeeemail_domain::MailErrorCode;
     use eeeemail_provider::{ListMessagesOptions, SearchQuery};
 
     /// A provider that never touches the network: a fixed folder list and a
@@ -313,8 +302,8 @@ mod tests {
     }
 
     impl MailProvider for FakeProvider {
-        fn id(&self) -> &str {
-            "fake"
+        fn id(&self) -> eeeemail_domain::ProviderId {
+            eeeemail_domain::ProviderId::GenericImap
         }
         fn account_id(&self) -> &str {
             &self.account_id
@@ -367,7 +356,7 @@ mod tests {
                 .map(|m| m.remote_id.clone())
                 .collect();
             delta.cursor = Some(SyncCursor {
-                provider: "fake".to_string(),
+                provider: eeeemail_domain::ProviderId::GenericImap,
                 account_id: self.account_id.clone(),
                 folder_id: folder.id.clone(),
                 cursor_type: "uid".to_string(),
@@ -452,7 +441,12 @@ mod tests {
                 .len(),
             2
         );
-        assert_eq!(store::folder_repo::list(&conn, &f.account_id).unwrap().len(), 1);
+        assert_eq!(
+            store::folder_repo::list(&conn, &f.account_id)
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -461,8 +455,15 @@ mod tests {
         let inbox = f.folder("INBOX", FolderKind::Inbox);
         let provider = f.provider(vec![inbox.clone()], vec![f.message(&inbox.id, "1")]);
 
-        f.app.sync().sync_account(&provider, &f.account_id, true).unwrap();
-        let again = f.app.sync().sync_account(&provider, &f.account_id, false).unwrap();
+        f.app
+            .sync()
+            .sync_account(&provider, &f.account_id, true)
+            .unwrap();
+        let again = f
+            .app
+            .sync()
+            .sync_account(&provider, &f.account_id, false)
+            .unwrap();
         assert_eq!(again.total_upserted(), 1);
 
         let conn = f.app.db().lock();
@@ -496,7 +497,10 @@ mod tests {
         assert_eq!(report.total_removed(), 1);
 
         let conn = f.app.db().lock();
-        assert_eq!(store::message_repo::count(&conn, &inbox.id, false).unwrap(), 0);
+        assert_eq!(
+            store::message_repo::count(&conn, &inbox.id, false).unwrap(),
+            0
+        );
     }
 
     #[test]
@@ -551,18 +555,20 @@ mod tests {
         let f = fixture();
         let inbox = f.folder("INBOX", FolderKind::Inbox);
         let provider = f.provider(vec![inbox], vec![]);
-        assert!(f
-            .app
-            .sync()
-            .sync_account(&provider, &f.account_id, true)
-            .unwrap()
-            .folders_changed);
-        assert!(!f
-            .app
-            .sync()
-            .sync_account(&provider, &f.account_id, false)
-            .unwrap()
-            .folders_changed);
+        assert!(
+            f.app
+                .sync()
+                .sync_account(&provider, &f.account_id, true)
+                .unwrap()
+                .folders_changed
+        );
+        assert!(
+            !f.app
+                .sync()
+                .sync_account(&provider, &f.account_id, false)
+                .unwrap()
+                .folders_changed
+        );
     }
 
     #[test]
@@ -578,7 +584,11 @@ mod tests {
 
         f.app
             .sync()
-            .sync_account(&f.provider(vec![inbox.clone()], vec![a, b]), &f.account_id, true)
+            .sync_account(
+                &f.provider(vec![inbox.clone()], vec![a, b]),
+                &f.account_id,
+                true,
+            )
             .unwrap();
 
         let conn = f.app.db().lock();
@@ -595,7 +605,11 @@ mod tests {
         m.is_read = false;
         f.app
             .sync()
-            .sync_account(&f.provider(vec![inbox.clone()], vec![m]), &f.account_id, true)
+            .sync_account(
+                &f.provider(vec![inbox.clone()], vec![m]),
+                &f.account_id,
+                true,
+            )
             .unwrap();
 
         let conn = f.app.db().lock();
@@ -608,8 +622,8 @@ mod tests {
     fn a_failing_folder_does_not_abort_the_account() {
         struct Broken;
         impl MailProvider for Broken {
-            fn id(&self) -> &str {
-                "broken"
+            fn id(&self) -> eeeemail_domain::ProviderId {
+                eeeemail_domain::ProviderId::GenericImap
             }
             fn account_id(&self) -> &str {
                 "acc"
