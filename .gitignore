@@ -7,3 +7,5 @@
 .DS_Store
 config.json
 !config.example.json
+.env
+email.json
