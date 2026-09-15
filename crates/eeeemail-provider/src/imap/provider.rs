@@ -16,6 +16,7 @@ use std::time::Duration;
 
 use crate::auth::{imap_quote, AuthProvider, AuthSecret, ConfigAuth};
 use crate::imap::client::ImapClient;
+use crate::imap::extensions;
 use crate::imap::mapper::{folder_from_raw, message_from_raw};
 use crate::imap::ImapEndpoint;
 use crate::smtp::{self, SmtpEndpoint};
@@ -442,6 +443,39 @@ impl MailProvider for GenericImapProvider {
             for raw in raws {
                 let message = message_from_raw(&raw, &self.account.id, &folder.id, folder.kind)?;
                 delta.new_messages.push(message);
+            }
+        }
+
+        // Server-assigned thread keys (Gmail `X-GM-THRID`, RFC 5256 `THREAD`).
+        // The imap crate cannot parse those responses on its own session, so
+        // they run on a throwaway raw connection. A failure only costs us a
+        // hint — local header threading still applies.
+        if !new_uids.is_empty() {
+            let want_thread = client.has_capability("THREAD=REFERENCES");
+            let want_thrid = client.has_capability("X-GM-EXT-1");
+            if want_thread || want_thrid {
+                match extensions::fetch_thread_hints(
+                    &self.imap,
+                    self.auth.as_ref(),
+                    &folder.remote_id,
+                    &new_uids,
+                    uid_validity,
+                    want_thread,
+                    want_thrid,
+                ) {
+                    Ok(hints) => {
+                        for message in &mut delta.new_messages {
+                            if let Ok(uid) = message.remote_id.parse::<u32>() {
+                                if let Some(key) = hints.get(&uid) {
+                                    message.server_thread_key = Some(key.clone());
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(folder = %folder.remote_id, error = %e, "thread extension hints unavailable")
+                    }
+                }
             }
         }
 

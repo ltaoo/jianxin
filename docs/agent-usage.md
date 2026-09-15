@@ -104,6 +104,7 @@ args = [
 | `mail_search_messages` | 搜索本地邮件索引 |
 | `mail_get_message` | 读取单封邮件；正文和头默认不返回 |
 | `mail_get_thread` | 读取本地归并出的会话，按时间旧到新 |
+| `mail_list_threads` | 列出本地会话，按最后活动时间倒序 |
 | `mail_sync_account` | 触发增量或全量同步 |
 
 ## 4. 添加 OAuth 账号
@@ -307,6 +308,18 @@ command
 ```
 
 会话消息按时间从旧到新返回，适合让 Agent 总结上下文。
+
+先列出会话再挑一个读（`thread_id` 可用 `mail_search_messages` 返回结果中的 id 前缀）：
+
+```json
+{
+  "account_id": "outlook",
+  "limit": 20,
+  "unread": true
+}
+```
+
+调用 `mail_list_threads`，返回按最后活动时间倒序的会话摘要（主题、消息数、未读数）。
 
 ## 8. 管理账号
 

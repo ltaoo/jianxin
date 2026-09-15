@@ -131,6 +131,30 @@ enum Command {
         headers: bool,
     },
 
+    /// List conversations (threads), most recent activity first.
+    Threads {
+        #[arg(long, short = 'n', default_value_t = 20)]
+        limit: u32,
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        /// Only conversations with unread messages.
+        #[arg(long)]
+        unread: bool,
+        /// Drop every stored thread and regroup all messages from their
+        /// headers. Use after grouping rules change.
+        #[arg(long)]
+        rebuild: bool,
+    },
+
+    /// Show one conversation, oldest message first.
+    Thread {
+        /// Thread id/prefix, or any message id/prefix inside it.
+        id: String,
+        /// Dump the HTML part instead of the text part.
+        #[arg(long)]
+        html: bool,
+    },
+
     /// Search the local database.
     Search {
         query: String,
@@ -162,7 +186,7 @@ enum Command {
 
     /// Send a message.
     Send {
-        #[arg(long, required = true)]
+        #[arg(long, required_unless_present = "reply_to")]
         to: Vec<String>,
         #[arg(long)]
         cc: Vec<String>,
@@ -170,6 +194,10 @@ enum Command {
         bcc: Vec<String>,
         #[arg(long, default_value = "")]
         subject: String,
+        /// Reply to this message (id or prefix); fills To/Subject/threading
+        /// headers when they are not given explicitly.
+        #[arg(long, value_name = "ID")]
+        reply_to: Option<String>,
         /// Message body. Omit to read from stdin.
         #[arg(long)]
         body: Option<String>,
@@ -272,6 +300,13 @@ fn run(cli: Cli) -> Result<()> {
             unread,
         } => cmd_list(&app, selector, &folder, limit, offset, unread, &out),
         Command::Read { id, html, headers } => cmd_read(&app, selector, &id, html, headers, &out),
+        Command::Threads {
+            limit,
+            offset,
+            unread,
+            rebuild,
+        } => cmd_threads(&app, selector, limit, offset, unread, rebuild, &out),
+        Command::Thread { id, html } => cmd_thread(&app, selector, &id, html, &out),
         Command::Search {
             query,
             limit,
@@ -285,6 +320,7 @@ fn run(cli: Cli) -> Result<()> {
             cc,
             bcc,
             subject,
+            reply_to,
             body,
             body_file,
             editor,
@@ -297,6 +333,7 @@ fn run(cli: Cli) -> Result<()> {
             &cc,
             &bcc,
             &subject,
+            reply_to.as_deref(),
             body.as_deref(),
             body_file.as_deref(),
             editor,
@@ -633,6 +670,133 @@ fn cmd_read(
     Ok(())
 }
 
+fn cmd_threads(
+    app: &App,
+    selector: Option<&str>,
+    limit: u32,
+    offset: u32,
+    unread: bool,
+    rebuild: bool,
+    out: &Printer,
+) -> Result<()> {
+    let cfg = app.resolve_account(selector)?;
+    let account = cfg.to_account();
+
+    if rebuild {
+        let count = app.mail().rebuild_threads(&account.id)?;
+        if out.is_json() {
+            out.print_json(&serde_json::json!({ "rebuilt_threads": count }))?;
+        } else {
+            println!("regrouped into {count} thread(s)");
+        }
+        return Ok(());
+    }
+
+    let threads = app.mail().threads(&account.id, limit, offset, unread)?;
+
+    if out.is_json() {
+        out.print_json(&threads)?;
+        return Ok(());
+    }
+    if threads.is_empty() {
+        println!("(no threads)");
+        return Ok(());
+    }
+    let rows: Vec<Vec<String>> = threads
+        .iter()
+        .map(|t| {
+            vec![
+                if t.unread_count > 0 {
+                    "*".to_string()
+                } else {
+                    " ".to_string()
+                },
+                short_id(&t.id),
+                format_date(t.last_message_at),
+                truncate(&t.subject, 48),
+                if t.unread_count > 0 {
+                    format!("{} ({})", t.message_count, t.unread_count)
+                } else {
+                    t.message_count.to_string()
+                },
+            ]
+        })
+        .collect();
+    out.table(&["", "ID", "LAST", "SUBJECT", "MSGS"], &rows);
+    Ok(())
+}
+
+fn cmd_thread(
+    app: &App,
+    selector: Option<&str>,
+    id: &str,
+    html: bool,
+    out: &Printer,
+) -> Result<()> {
+    let cfg = app.resolve_account(selector)?;
+    let account = cfg.to_account();
+    let thread = app.mail().resolve_thread(&account.id, id)?;
+    let detail = app.mail().thread(&account.id, &thread.id)?;
+
+    if out.is_json() {
+        out.print_json(&serde_json::json!({
+            "thread": detail.thread,
+            "messages": detail.messages,
+        }))?;
+        return Ok(());
+    }
+
+    if detail.messages.is_empty() {
+        println!("(no messages in thread {})", short_id(&thread.id));
+        return Ok(());
+    }
+
+    let total = detail.messages.len();
+    for (i, message) in detail.messages.iter().enumerate() {
+        if i > 0 {
+            println!();
+        }
+        println!("──── #{} of {} ────", i + 1, total);
+        println!(
+            "From:    {}",
+            eeeemail_domain::join_addresses(&message.from)
+        );
+        if !message.to.is_empty() {
+            println!("To:      {}", eeeemail_domain::join_addresses(&message.to));
+        }
+        if !message.cc.is_empty() {
+            println!("Cc:      {}", eeeemail_domain::join_addresses(&message.cc));
+        }
+        println!("Subject: {}", message.subject);
+        println!("Date:    {}", format_date(message.sort_ts()));
+        if !message.attachments.is_empty() {
+            println!(
+                "Attach:  {}",
+                message
+                    .attachments
+                    .iter()
+                    .map(|a| a.display_name().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+        println!();
+
+        let body = if html {
+            message.html_body.as_deref().unwrap_or("(no html part)")
+        } else {
+            message.body_preferred()
+        };
+        println!("{}", body.trim_end());
+    }
+
+    // Opening a conversation marks it read — same contract as `read`.
+    for message in detail.messages.iter().filter(|m| !m.is_read) {
+        let _ = app.mail().mark_read(&cfg, &message.id, true);
+    }
+    Ok(())
+}
+
 fn cmd_search(
     app: &App,
     selector: Option<&str>,
@@ -734,6 +898,7 @@ fn cmd_send(
     cc: &[String],
     bcc: &[String],
     subject: &str,
+    reply_to: Option<&str>,
     body: Option<&str>,
     body_file: Option<&Path>,
     editor: bool,
@@ -761,6 +926,36 @@ fn cmd_send(
         compose.bcc.extend(eeeemail_domain::parse_address_list(a));
     }
     compose.subject = subject.to_string();
+
+    if let Some(hint) = reply_to {
+        let message = app.mail().resolve_message(&account.id, hint)?;
+        // Thread the reply: everyone groups on these headers, not just us.
+        compose.in_reply_to = message.message_id_header.clone();
+        compose.references = eeeemail_domain::thread::build_references(&message);
+        if compose.subject.is_empty() {
+            let s = message.subject.trim();
+            compose.subject = if s.to_ascii_lowercase().starts_with("re:") {
+                s.to_string()
+            } else {
+                format!("Re: {s}")
+            };
+        }
+        if compose.to.is_empty() {
+            let targets = if !message.reply_to.is_empty() {
+                message.reply_to.clone()
+            } else {
+                message.from.clone()
+            };
+            compose.to = targets
+                .iter()
+                .filter(|a| a.email != account.email)
+                .cloned()
+                .collect();
+            if compose.to.is_empty() {
+                compose.to = targets;
+            }
+        }
+    }
 
     let text = if let Some(b) = body {
         b.to_string()

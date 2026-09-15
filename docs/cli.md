@@ -143,6 +143,30 @@ eeeemail read <id> --html        # 输出 HTML 正文而非纯文本
 eeeemail read <id> --headers     # 打印原始头
 ```
 
+### `threads`
+
+列出会话（按最后活动时间倒序）。会话是本地归组的结果：按 `In-Reply-To`/`References` 祖先链，再退到服务端线程 key（Gmail `X-GM-THRID`、IMAP `THREAD=REFERENCES`）、Outlook `Thread-Index` 根，最后是归一化主题。
+
+```sh
+eeeemail threads                 # 最近 20 个会话
+eeeemail threads -n 50           # 前 50 个
+eeeemail threads --offset 20     # 翻页
+eeeemail threads --unread        # 只看有未读的会话
+eeeemail threads --rebuild       # 丢弃现有归组，按存储的头全部重算
+```
+
+`--rebuild` 用来在归组规则改进后重算存量邮件；它只基于已存储的 `References`/主题等信息，不会重新拉取邮件。
+
+### `thread`
+
+显示一个会话的全部邮件，时间正序。`id` 可以是会话 id/前缀，也可以是会话内任意一封邮件的 id/前缀。打开即把会话内未读标为已读。
+
+```sh
+eeeemail thread <thread-id>
+eeeemail thread <message-id>     # 用邮件定位它所在的会话
+eeeemail thread <id> --html      # 输出 HTML 正文
+```
+
 ### `search`
 
 搜索本地数据库。本地搜索是对主题、摘要、正文、发件人（邮箱/姓名）的子串匹配。
@@ -181,7 +205,7 @@ eeeemail move <id> archive
 
 ### `send`
 
-发送邮件。`--to` 必填。
+发送邮件。`--to` 必填（使用 `--reply-to` 时可省略，自动填回复目标）。
 
 ```sh
 # 简单文本
@@ -201,9 +225,14 @@ eeeemail send --to a@example.com --subject "hi" --attach report.pdf
 
 # 存草稿而非发送
 eeeemail send --to a@example.com --subject "hi" --body "hello" --draft
+
+# 回复：自动填 To（Reply-To 优先）、Re: 主题、In-Reply-To/References 头
+eeeemail send --reply-to <id> --body "here you go"
 ```
 
 正文来源优先级：`--body` → `--body-file` → `--editor`（或 stdin 是 TTY 时调 `$EDITOR`）→ stdin。
+
+回复会携带 `In-Reply-To`/`References` 线程头，保证回复在各家客户端都归入同一会话。
 
 ### `outbox`
 
@@ -233,7 +262,7 @@ eeeemail agent
 
 ### `tui`
 
-打开终端 UI（无子命令时的默认行为）。
+打开终端 UI（无子命令时的默认行为）：左侧文件夹、右上的邮件/会话列表、右下的正文预览。按 `f` 同步、`c` 撰写、`t` 在平铺列表与会话视图间切换；完整快捷键见 [tui.md](tui.md)。
 
 ```sh
 eeeemail tui
@@ -242,5 +271,6 @@ eeeemail tui
 ## 相关文档
 
 - [watch.md](watch.md) — 新邮件监听与事件通道
+- [tui.md](tui.md) — 终端 UI 布局与快捷键
 - [agent-usage.md](agent-usage.md) — MCP agent 服务
 - [outlook-oauth2.md](outlook-oauth2.md) — Outlook OAuth2 登录

@@ -14,7 +14,7 @@ use crate::migrations::db_err;
 
 const COLUMNS: &str = "id, account_id, folder_id, remote_id, immutable_id, thread_id, subject, \
      snippet, text_body, html_body, size, received_at, sent_at, message_id_header, in_reply_to, \
-     is_read, is_starred, is_draft, is_deleted, provider_data";
+     is_read, is_starred, is_draft, is_deleted, provider_data, thread_index_root, server_thread_key";
 
 /// Insert or replace messages and all their child rows.
 ///
@@ -29,9 +29,9 @@ pub fn upsert_many(conn: &Connection, messages: &[Message]) -> Result<usize> {
                 (id, account_id, folder_id, remote_id, immutable_id, thread_id, subject,
                  subject_normalized, snippet, text_body, html_body, size, received_at, sent_at,
                  message_id_header, in_reply_to, is_read, is_starred, is_draft, is_deleted,
-                 provider_data, updated_at)
+                 provider_data, thread_index_root, server_thread_key, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                     ?17, ?18, ?19, ?20, ?21, ?22)
+                     ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
              ON CONFLICT(account_id, folder_id, remote_id) DO UPDATE SET
                  immutable_id      = excluded.immutable_id,
                  -- Keep the thread we already computed: a re-sync that arrives
@@ -52,6 +52,10 @@ pub fn upsert_many(conn: &Connection, messages: &[Message]) -> Result<usize> {
                  is_draft          = excluded.is_draft,
                  is_deleted        = excluded.is_deleted,
                  provider_data     = excluded.provider_data,
+                 -- Threading signals arrive with body fetches only; a flag-only
+                 -- re-sync passes NULL and must not erase what we stored.
+                 thread_index_root = COALESCE(excluded.thread_index_root, messages.thread_index_root),
+                 server_thread_key = COALESCE(excluded.server_thread_key, messages.server_thread_key),
                  updated_at        = excluded.updated_at",
         )
         .map_err(db_err)?;
@@ -92,6 +96,8 @@ pub fn upsert_many(conn: &Connection, messages: &[Message]) -> Result<usize> {
                 m.is_draft as i32,
                 m.is_deleted as i32,
                 provider_data,
+                m.thread_index_root,
+                m.server_thread_key,
                 now,
             ])
             .map_err(db_err)?;
@@ -106,8 +112,11 @@ pub fn upsert_many(conn: &Connection, messages: &[Message]) -> Result<usize> {
 fn write_children(conn: &Connection, m: &Message) -> Result<()> {
     conn.execute("DELETE FROM addresses WHERE message_id = ?1", [&m.id])
         .map_err(db_err)?;
-    conn.execute("DELETE FROM message_references WHERE message_id = ?1", [&m.id])
-        .map_err(db_err)?;
+    conn.execute(
+        "DELETE FROM message_references WHERE message_id = ?1",
+        [&m.id],
+    )
+    .map_err(db_err)?;
     conn.execute("DELETE FROM message_labels WHERE message_id = ?1", [&m.id])
         .map_err(db_err)?;
     conn.execute("DELETE FROM attachments WHERE message_id = ?1", [&m.id])
@@ -129,11 +138,7 @@ fn write_children(conn: &Connection, m: &Message) -> Result<()> {
         ] {
             for (i, addr) in list.iter().enumerate() {
                 stmt.execute(rusqlite::params![
-                    m.id,
-                    role,
-                    i as i64,
-                    addr.name,
-                    addr.email
+                    m.id, role, i as i64, addr.name, addr.email
                 ])
                 .map_err(db_err)?;
             }
@@ -208,7 +213,11 @@ pub fn get_by_remote_id(
 ) -> Result<Option<Message>> {
     let sql = format!("SELECT {COLUMNS} FROM messages WHERE folder_id = ?1 AND remote_id = ?2");
     let mut m: Option<Message> = conn
-        .query_row(&sql, rusqlite::params![folder_id, remote_id], row_to_message)
+        .query_row(
+            &sql,
+            rusqlite::params![folder_id, remote_id],
+            row_to_message,
+        )
         .optional()
         .map_err(db_err)?;
     if let Some(m) = m.as_mut() {
@@ -235,6 +244,127 @@ pub fn list(
     let mut stmt = conn.prepare(&sql).map_err(db_err)?;
     let mut out = stmt
         .query_map(rusqlite::params![folder_id, limit, offset], row_to_message)
+        .map_err(db_err)?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(db_err)?;
+    hydrate(conn, &mut out)?;
+    Ok(out)
+}
+
+/// Every stored message of an account, oldest first — the input for a full
+/// thread rebuild.
+pub fn list_account(conn: &Connection, account_id: &str) -> Result<Vec<Message>> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {COLUMNS} FROM messages
+              WHERE account_id = ?1 AND is_deleted = 0
+              ORDER BY COALESCE(sent_at, received_at, 0) ASC, id ASC"
+        ))
+        .map_err(db_err)?;
+    let mut out = stmt
+        .query_map(rusqlite::params![account_id], row_to_message)
+        .map_err(db_err)?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(db_err)?;
+    hydrate(conn, &mut out)?;
+    Ok(out)
+}
+
+/// Collapse per-folder copies of one mail into a single row.
+///
+/// A message is stored once per folder (`ON CONFLICT(account_id, folder_id,
+/// remote_id)`), and Gmail materialises every label as a folder, so the same
+/// mail appears two or three times. The surviving copy is the one in the most
+/// significant folder — inbox first — because that is the row a flag action
+/// should target. `immutable_id` is the stable key when the provider gives
+/// one; `message_id_header` is the next best; the row id never collapses.
+const DEDUP_RANK: &str = "ROW_NUMBER() OVER (
+    PARTITION BY m.account_id,
+                 COALESCE(NULLIF(m.immutable_id, ''), m.message_id_header, m.id)
+    ORDER BY CASE COALESCE(f.kind, '')
+                 WHEN 'inbox'   THEN 0
+                 WHEN 'archive' THEN 1
+                 WHEN 'sent'    THEN 2
+                 WHEN 'drafts'  THEN 3
+                 WHEN 'custom'  THEN 4
+                 WHEN 'spam'    THEN 5
+                 ELSE 6 END,
+             m.id
+)";
+
+/// One page across every account, newest first, one row per real message.
+pub fn list_all(
+    conn: &Connection,
+    limit: u32,
+    offset: u32,
+    unread_only: bool,
+) -> Result<Vec<Message>> {
+    let unread_clause = if unread_only { "AND m.is_read = 0" } else { "" };
+    let sql = format!(
+        "SELECT {COLUMNS} FROM (
+             SELECT m.*, {DEDUP_RANK} AS dedup_rank
+               FROM messages m
+               LEFT JOIN folders f ON f.id = m.folder_id
+              WHERE m.is_deleted = 0 {unread_clause}
+         )
+         WHERE dedup_rank = 1
+         ORDER BY COALESCE(sent_at, received_at, 0) DESC, id DESC
+         LIMIT ?1 OFFSET ?2"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(db_err)?;
+    let mut out = stmt
+        .query_map(rusqlite::params![limit, offset], row_to_message)
+        .map_err(db_err)?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(db_err)?;
+    hydrate(conn, &mut out)?;
+    Ok(out)
+}
+
+/// Unread count for the merged view, deduplicated like `list_all`.
+pub fn count_all_unread(conn: &Connection) -> Result<u64> {
+    let sql = format!(
+        "SELECT COUNT(*) FROM (
+             SELECT {DEDUP_RANK} AS dedup_rank
+               FROM messages m
+               LEFT JOIN folders f ON f.id = m.folder_id
+              WHERE m.is_deleted = 0 AND m.is_read = 0
+         )
+         WHERE dedup_rank = 1"
+    );
+    conn.query_row(&sql, [], |r| r.get(0)).map_err(db_err)
+}
+
+/// Search across every account, newest first, deduplicated like `list_all`.
+pub fn search_all(conn: &Connection, query: &str, limit: u32) -> Result<Vec<Message>> {    let query = query.trim();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    let like = format!("%{}%", query.replace('%', "\\%"));
+
+    let sql = format!(
+        "SELECT {COLUMNS} FROM (
+             SELECT m.*, {DEDUP_RANK} AS dedup_rank
+               FROM messages m
+               LEFT JOIN folders f ON f.id = m.folder_id
+              WHERE m.is_deleted = 0
+                AND (
+                      m.subject   LIKE ?1 ESCAPE '\\'
+                   OR m.snippet    LIKE ?1 ESCAPE '\\'
+                   OR m.text_body LIKE ?1 ESCAPE '\\'
+                   OR EXISTS (
+                        SELECT 1 FROM addresses a
+                         WHERE a.message_id = m.id
+                           AND (a.email LIKE ?1 ESCAPE '\\' OR a.name LIKE ?1 ESCAPE '\\'))
+                )
+         )
+         WHERE dedup_rank = 1
+         ORDER BY COALESCE(sent_at, received_at, 0) DESC
+         LIMIT ?2"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(db_err)?;
+    let mut out = stmt
+        .query_map(rusqlite::params![like, limit], row_to_message)
         .map_err(db_err)?
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(db_err)?;
@@ -322,9 +452,8 @@ pub fn remove_by_remote_ids(
         return Ok(0);
     }
     let placeholders = crate::placeholders(remote_ids.len());
-    let sql = format!(
-        "DELETE FROM messages WHERE folder_id = ?1 AND remote_id IN ({placeholders})"
-    );
+    let sql =
+        format!("DELETE FROM messages WHERE folder_id = ?1 AND remote_id IN ({placeholders})");
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(folder_id.to_string())];
     for id in remote_ids {
         params.push(Box::new(id.clone()));
@@ -474,14 +603,17 @@ fn hydrate(conn: &Connection, messages: &mut [Message]) -> Result<()> {
         );
         let mut stmt = conn.prepare(&sql).map_err(db_err)?;
         let rows = stmt
-            .query_map(rusqlite::params_from_iter(param().iter().map(|p| p.as_ref())), |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, Option<String>>(2)?,
-                    r.get::<_, String>(3)?,
-                ))
-            })
+            .query_map(
+                rusqlite::params_from_iter(param().iter().map(|p| p.as_ref())),
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, Option<String>>(2)?,
+                        r.get::<_, String>(3)?,
+                    ))
+                },
+            )
             .map_err(db_err)?
             .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(db_err)?;
@@ -508,9 +640,10 @@ fn hydrate(conn: &Connection, messages: &mut [Message]) -> Result<()> {
         );
         let mut stmt = conn.prepare(&sql).map_err(db_err)?;
         let rows = stmt
-            .query_map(rusqlite::params_from_iter(param().iter().map(|p| p.as_ref())), |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-            })
+            .query_map(
+                rusqlite::params_from_iter(param().iter().map(|p| p.as_ref())),
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+            )
             .map_err(db_err)?
             .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(db_err)?;
@@ -528,9 +661,10 @@ fn hydrate(conn: &Connection, messages: &mut [Message]) -> Result<()> {
         );
         let mut stmt = conn.prepare(&sql).map_err(db_err)?;
         let rows = stmt
-            .query_map(rusqlite::params_from_iter(param().iter().map(|p| p.as_ref())), |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-            })
+            .query_map(
+                rusqlite::params_from_iter(param().iter().map(|p| p.as_ref())),
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+            )
             .map_err(db_err)?
             .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(db_err)?;
@@ -549,18 +683,21 @@ fn hydrate(conn: &Connection, messages: &mut [Message]) -> Result<()> {
         );
         let mut stmt = conn.prepare(&sql).map_err(db_err)?;
         let rows = stmt
-            .query_map(rusqlite::params_from_iter(param().iter().map(|p| p.as_ref())), |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, Option<String>>(2)?,
-                    r.get::<_, String>(3)?,
-                    r.get::<_, i64>(4)?,
-                    r.get::<_, Option<String>>(5)?,
-                    r.get::<_, Option<String>>(6)?,
-                    r.get::<_, Option<String>>(7)?,
-                ))
-            })
+            .query_map(
+                rusqlite::params_from_iter(param().iter().map(|p| p.as_ref())),
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, Option<String>>(2)?,
+                        r.get::<_, String>(3)?,
+                        r.get::<_, i64>(4)?,
+                        r.get::<_, Option<String>>(5)?,
+                        r.get::<_, Option<String>>(6)?,
+                        r.get::<_, Option<String>>(7)?,
+                    ))
+                },
+            )
             .map_err(db_err)?
             .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(db_err)?;
@@ -596,8 +733,8 @@ pub fn set_attachment_path(conn: &Connection, attachment_id: &str, path: &str) -
 
 fn row_to_message(row: &rusqlite::Row<'_>) -> rusqlite::Result<Message> {
     let provider_data: Option<String> = row.get(19)?;
-    let provider_data = provider_data
-        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+    let provider_data =
+        provider_data.and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
 
     let m = Message {
         id: row.get::<_, MessageId>(0)?,
@@ -619,6 +756,8 @@ fn row_to_message(row: &rusqlite::Row<'_>) -> rusqlite::Result<Message> {
         is_starred: row.get::<_, i32>(16)? != 0,
         is_draft: row.get::<_, i32>(17)? != 0,
         is_deleted: row.get::<_, i32>(18)? != 0,
+        thread_index_root: row.get(20)?,
+        server_thread_key: row.get(21)?,
         labels: Vec::new(),
         attachments: Vec::new(),
         from: Vec::new(),
@@ -707,11 +846,7 @@ mod tests {
         let db = Database::open_in_memory().unwrap();
         let folder = seed(&db);
         let conn = db.lock();
-        upsert_many(
-            &conn,
-            &[msg(&folder, "1", "A"), msg(&folder, "2", "B")],
-        )
-        .unwrap();
+        upsert_many(&conn, &[msg(&folder, "1", "A"), msg(&folder, "2", "B")]).unwrap();
 
         let n = apply_flag_updates(
             &conn,
@@ -758,5 +893,45 @@ mod tests {
 
         let all = list(&conn, &folder, 10, 0, false).unwrap();
         assert_eq!(all[0].subject, "B");
+    }
+
+    #[test]
+    fn list_all_merges_accounts_and_collapses_folder_copies() {
+        let db = Database::open_in_memory().unwrap();
+        let conn = db.lock();
+        let mut seed_two_accounts = |tag: &str| -> (String, String) {
+            crate::test_util::seed_account(&conn, tag).unwrap();
+            let inbox = Folder::new(tag, "INBOX", "Inbox", eeeemail_domain::FolderKind::Inbox);
+            let archive =
+                Folder::new(tag, "All", "All", eeeemail_domain::FolderKind::Archive);
+            let ids = (inbox.id.clone(), archive.id.clone());
+            crate::folder_repo::upsert_many(&conn, &[inbox, archive]).unwrap();
+            ids
+        };
+        let (a_inbox, a_archive) = seed_two_accounts("accA");
+        let (b_inbox, _) = seed_two_accounts("accB");
+
+        // One mail filed in two folders of account A (the Gmail label case),
+        // plus a distinct mail in account B.
+        let mut copy1 = msg(&a_inbox, "1", "Duplicated");
+        copy1.account_id = "accA".to_string();
+        copy1.message_id_header = Some("<dup@example.com>".to_string());
+        let mut copy2 = msg(&a_archive, "9", "Duplicated");
+        copy2.account_id = "accA".to_string();
+        copy2.message_id_header = Some("<dup@example.com>".to_string());
+        let mut other = msg(&b_inbox, "1", "Only in B");
+        other.account_id = "accB".to_string();
+        other.message_id_header = Some("<b@example.com>".to_string());
+        upsert_many(&conn, &[copy1, copy2, other]).unwrap();
+
+        let all = list_all(&conn, 10, 0, false).unwrap();
+        assert_eq!(all.len(), 2);
+        // The inbox copy survives, not the archive one.
+        assert!(all.iter().all(|m| m.subject != "Duplicated" || m.folder_id == a_inbox));
+        assert!(all.iter().any(|m| m.subject == "Only in B" && m.account_id == "accB"));
+
+        let found = search_all(&conn, "duplicated", 10).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].folder_id, a_inbox);
     }
 }

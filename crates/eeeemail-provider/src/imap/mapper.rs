@@ -10,18 +10,21 @@ use mailparse::{DispositionType, MailHeaderMap, ParsedMail};
 
 use super::client::RawFolder;
 use super::client::RawMessage;
+use super::utf7;
 
 /// Map a `LIST` entry onto a domain folder.
 ///
 /// Remote names are never used as identifiers: the local id is derived, and the
 /// role is detected from SPECIAL-USE attributes first, then the name, then an
-/// explicit user override.
+/// explicit user override. The stored `name` is the decoded (readable) form;
+/// `remote_id` keeps the wire form because that is what `SELECT` expects.
 pub fn folder_from_raw(
     raw: &RawFolder,
     account_id: &str,
     overrides: Option<&FolderOverrides>,
 ) -> Folder {
-    let mut kind = FolderKind::detect(&raw.name, Some(&raw.attributes));
+    let display = utf7::decode(&raw.name);
+    let mut kind = FolderKind::detect(&display, Some(&raw.attributes));
 
     if let Some(overrides) = overrides {
         for (role, forced) in [
@@ -32,13 +35,16 @@ pub fn folder_from_raw(
             (FolderKind::Spam, &overrides.spam),
             (FolderKind::Archive, &overrides.archive),
         ] {
-            if forced.as_deref() == Some(raw.name.as_str()) {
+            if forced
+                .as_deref()
+                .is_some_and(|n| n == raw.name || n == display)
+            {
                 kind = role;
             }
         }
     }
 
-    let mut folder = Folder::new(account_id, &raw.name, &raw.name, kind);
+    let mut folder = Folder::new(account_id, &raw.name, &display, kind);
     folder.id = Folder::deterministic_id(account_id, &raw.name);
     folder
 }
@@ -46,12 +52,12 @@ pub fn folder_from_raw(
 /// Human-friendly display name for a remote folder path.
 pub fn display_name(remote_id: &str, delimiter: Option<&str>) -> String {
     match delimiter {
-        Some(d) if !d.is_empty() => remote_id
-            .rsplit(d)
+        Some(d) if !d.is_empty() => remote_id.rsplit(d).next().unwrap_or(remote_id).to_string(),
+        _ => remote_id
+            .rsplit('/')
             .next()
             .unwrap_or(remote_id)
             .to_string(),
-        _ => remote_id.rsplit('/').next().unwrap_or(remote_id).to_string(),
     }
 }
 
@@ -137,12 +143,34 @@ fn fill_from_parsed(message: &mut Message, parsed: &ParsedMail) {
                 .collect()
         })
         .unwrap_or_default();
+    message.thread_index_root = headers
+        .get_first_value("Thread-Index")
+        .and_then(|s| decode_thread_index_root(&s));
 
     message.sent_at = headers
         .get_first_value("Date")
         .and_then(|value| mailparse::dateparse(&value).ok());
 
     walk_parts(message, parsed);
+}
+
+/// Outlook's `Thread-Index` (MS-OXCMAIL): base64 of a 16-byte conversation
+/// GUID followed by per-message clock data. Only the GUID identifies the
+/// conversation, so replies and forwards share the first 16 decoded bytes.
+fn decode_thread_index_root(raw: &str) -> Option<String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(raw.trim())
+        .ok()?;
+    if bytes.len() < 16 {
+        return None;
+    }
+    Some(
+        bytes[..16]
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>(),
+    )
 }
 
 fn addresses(header: Option<String>) -> Vec<Address> {
@@ -163,12 +191,7 @@ fn walk_parts(message: &mut Message, part: &ParsedMail) {
 
     if is_attachment {
         let size = part.get_body_raw().map(|b| b.len() as u64).unwrap_or(0);
-        let mut attachment = Attachment::new(
-            &message.id,
-            filename.clone(),
-            &mime,
-            size,
-        );
+        let mut attachment = Attachment::new(&message.id, filename.clone(), &mime, size);
         attachment.content_id = part.headers.get_first_value("Content-ID");
         message.attachments.push(attachment);
         return;
@@ -197,4 +220,58 @@ fn decoded_body(part: &ParsedMail) -> Option<String> {
     part.get_body_raw()
         .ok()
         .map(|raw| String::from_utf8_lossy(&raw).to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_display_name_but_keeps_wire_remote_id() {
+        let raw = RawFolder {
+            name: "[Gmail]/&XfJT0ZAB-".to_string(),
+            attributes: "\\HasNoChildren \\Sent".to_string(),
+            delimiter: Some("/".to_string()),
+        };
+        let folder = folder_from_raw(&raw, "acc", None);
+        assert_eq!(folder.remote_id, "[Gmail]/&XfJT0ZAB-");
+        assert_eq!(folder.name, "[Gmail]/已发送");
+        assert_eq!(folder.kind, FolderKind::Sent);
+    }
+
+    #[test]
+    fn detects_role_from_decoded_name_without_special_use() {
+        let raw = RawFolder {
+            name: "&XfJT0ZAB-".to_string(), // 已发送, no SPECIAL-USE attribute
+            attributes: "\\HasNoChildren".to_string(),
+            delimiter: None,
+        };
+        let folder = folder_from_raw(&raw, "acc", None);
+        assert_eq!(folder.name, "已发送");
+        assert_eq!(folder.kind, FolderKind::Sent);
+    }
+
+    #[test]
+    fn decodes_thread_index_root() {
+        // 22 bytes: a 16-byte GUID, then per-message clock data.
+        let raw: Vec<u8> = (0u8..22).collect();
+        use base64::Engine;
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&raw);
+        assert_eq!(
+            decode_thread_index_root(&encoded).as_deref(),
+            Some("000102030405060708090a0b0c0d0e0f")
+        );
+    }
+
+    #[test]
+    fn rejects_broken_thread_index() {
+        assert_eq!(decode_thread_index_root("not base64!!!"), None);
+        assert_eq!(
+            decode_thread_index_root(&{
+                use base64::Engine;
+                base64::engine::general_purpose::STANDARD.encode([0u8; 8])
+            }),
+            None
+        );
+    }
 }

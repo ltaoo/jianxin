@@ -25,6 +25,12 @@ pub struct Message {
     pub message_id_header: Option<String>,
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
+    /// Outlook `Thread-Index` root: the first 16 decoded bytes as hex. All
+    /// messages of one Outlook conversation share this GUID.
+    pub thread_index_root: Option<String>,
+    /// Server-side thread key stamped by the provider when the server offers
+    /// native grouping: `gmail-thrid:<id>` or `imap-thread:<uidvalidity>:<uid>`.
+    pub server_thread_key: Option<String>,
 
     // --- addressing -------------------------------------------------------
     pub from: Vec<Address>,
@@ -70,6 +76,8 @@ impl Default for Message {
             message_id_header: None,
             in_reply_to: None,
             references: Vec::new(),
+            thread_index_root: None,
+            server_thread_key: None,
             from: Vec::new(),
             to: Vec::new(),
             cc: Vec::new(),

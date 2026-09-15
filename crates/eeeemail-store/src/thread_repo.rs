@@ -2,8 +2,9 @@
 //!
 //! Graph exposes `conversationId` and Gmail a `threadId`, but IMAP has neither.
 //! Threads are therefore assembled locally from `Message-ID` / `In-Reply-To` /
-//! `References`, with a normalised-subject fallback, so every provider ends up
-//! with the same model (§17).
+//! `References`, with provider thread keys, the Outlook `Thread-Index` root and
+//! a normalised-subject fallback, so every provider ends up with the same
+//! model (§17).
 
 use eeeemail_domain::thread::normalise_subject;
 use eeeemail_domain::{AccountId, Message, MessageId, Result, Thread, ThreadId};
@@ -16,8 +17,11 @@ use crate::migrations::db_err;
 /// Resolution order:
 ///
 /// 1. an ancestor named in `In-Reply-To` / `References` that we already know,
-/// 2. an existing thread in the same account with the same normalised subject,
-/// 3. a brand new thread.
+/// 2. another message carrying the same server thread key (Gmail
+///    `X-GM-THRID`, an IMAP `THREAD=REFERENCES` group),
+/// 3. another message with the same Outlook `Thread-Index` root,
+/// 4. an existing thread in the same account with the same normalised subject,
+/// 5. a brand new thread.
 pub fn assign(conn: &Connection, account_id: &AccountId, messages: &mut [Message]) -> Result<()> {
     if messages.is_empty() {
         return Ok(());
@@ -38,6 +42,18 @@ pub fn assign(conn: &Connection, account_id: &AccountId, messages: &mut [Message
         }
 
         let mut thread_id = ancestor_thread(conn, account_id, &messages[i])?;
+
+        if thread_id.is_none() {
+            if let Some(key) = &messages[i].server_thread_key {
+                thread_id = keyed_thread(conn, account_id, "server_thread_key", key)?;
+            }
+        }
+
+        if thread_id.is_none() {
+            if let Some(root) = &messages[i].thread_index_root {
+                thread_id = keyed_thread(conn, account_id, "thread_index_root", root)?;
+            }
+        }
 
         if thread_id.is_none() {
             let subject = normalise_subject(&messages[i].subject);
@@ -75,6 +91,27 @@ pub fn assign(conn: &Connection, account_id: &AccountId, messages: &mut [Message
         }
     }
     Ok(())
+}
+
+/// Look up the thread of any message that already carries `column = key`.
+///
+/// `column` is a fixed identifier from this module, never user input.
+fn keyed_thread(
+    conn: &Connection,
+    account_id: &AccountId,
+    column: &str,
+    key: &str,
+) -> Result<Option<ThreadId>> {
+    let sql = format!(
+        "SELECT thread_id FROM messages
+          WHERE account_id = ?1 AND {column} = ?2 AND thread_id IS NOT NULL
+          LIMIT 1"
+    );
+    conn.query_row(&sql, rusqlite::params![account_id, key], |r| {
+        r.get::<_, String>(0)
+    })
+    .optional()
+    .map_err(db_err)
 }
 
 /// Look up the thread of any ancestor referenced by this message.
@@ -127,44 +164,74 @@ pub fn get(conn: &Connection, id: &str) -> Result<Option<Thread>> {
         "SELECT id, account_id, subject, message_count, unread_count, last_message_at
            FROM threads WHERE id = ?1",
         [id],
-        |row| {
-            Ok(Thread {
-                id: row.get(0)?,
-                account_id: row.get(1)?,
-                subject: row.get(2)?,
-                message_ids: Vec::new(),
-                last_message_at: row.get(5)?,
-                unread_count: row.get::<_, u32>(4)?,
-            })
-        },
+        row_to_thread,
     )
     .optional()
     .map_err(db_err)
 }
 
-pub fn list(conn: &Connection, account_id: &str, limit: u32) -> Result<Vec<Thread>> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, account_id, subject, message_count, unread_count, last_message_at
-               FROM threads WHERE account_id = ?1
-              ORDER BY last_message_at DESC LIMIT ?2",
-        )
-        .map_err(db_err)?;
+pub fn list(
+    conn: &Connection,
+    account_id: &str,
+    limit: u32,
+    offset: u32,
+    unread_only: bool,
+) -> Result<Vec<Thread>> {
+    let unread_clause = if unread_only {
+        "AND unread_count > 0"
+    } else {
+        ""
+    };
+    let sql = format!(
+        "SELECT id, account_id, subject, message_count, unread_count, last_message_at
+           FROM threads WHERE account_id = ?1 {unread_clause}
+          ORDER BY last_message_at DESC LIMIT ?2 OFFSET ?3"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(db_err)?;
     let rows = stmt
-        .query_map(rusqlite::params![account_id, limit], |row| {
-            Ok(Thread {
-                id: row.get(0)?,
-                account_id: row.get(1)?,
-                subject: row.get(2)?,
-                message_ids: Vec::new(),
-                last_message_at: row.get(5)?,
-                unread_count: row.get::<_, u32>(4)?,
-            })
-        })
+        .query_map(rusqlite::params![account_id, limit, offset], row_to_thread)
         .map_err(db_err)?
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(db_err)?;
     Ok(rows)
+}
+
+/// Threads across every account, newest first — the merged conversation view.
+pub fn list_all(
+    conn: &Connection,
+    limit: u32,
+    offset: u32,
+    unread_only: bool,
+) -> Result<Vec<Thread>> {
+    let unread_clause = if unread_only {
+        "WHERE unread_count > 0"
+    } else {
+        ""
+    };
+    let sql = format!(
+        "SELECT id, account_id, subject, message_count, unread_count, last_message_at
+           FROM threads {unread_clause}
+          ORDER BY last_message_at DESC LIMIT ?1 OFFSET ?2"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(db_err)?;
+    let rows = stmt
+        .query_map(rusqlite::params![limit, offset], row_to_thread)
+        .map_err(db_err)?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(db_err)?;
+    Ok(rows)
+}
+
+fn row_to_thread(row: &rusqlite::Row<'_>) -> rusqlite::Result<Thread> {
+    Ok(Thread {
+        id: row.get(0)?,
+        account_id: row.get(1)?,
+        subject: row.get(2)?,
+        message_count: row.get::<_, u32>(3)?,
+        message_ids: Vec::new(),
+        last_message_at: row.get(5)?,
+        unread_count: row.get::<_, u32>(4)?,
+    })
 }
 
 /// All message ids belonging to a thread, oldest first.
@@ -225,6 +292,37 @@ pub fn recompute_for(conn: &Connection, messages: &[Message]) -> Result<()> {
         recompute(conn, t)?;
     }
     Ok(())
+}
+
+/// Wipe and rebuild every thread of one account from the stored messages,
+/// returning the resulting thread count. Grouping rules only apply to mail
+/// synced after they landed; this re-runs grouping over what is already
+/// stored. Oldest-first ordering approximates delivery order, so a parent is
+/// usually assigned before the replies that reference it.
+pub fn rebuild(conn: &Connection, account_id: &AccountId) -> Result<usize> {
+    conn.execute(
+        "UPDATE messages SET thread_id = NULL WHERE account_id = ?1",
+        [account_id as &str],
+    )
+    .map_err(db_err)?;
+    conn.execute(
+        "DELETE FROM threads WHERE account_id = ?1",
+        [account_id as &str],
+    )
+    .map_err(db_err)?;
+
+    let mut messages = crate::message_repo::list_account(conn, account_id)?;
+    assign(conn, account_id, &mut messages)?;
+    recompute_for(conn, &messages)?;
+
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM threads WHERE account_id = ?1",
+            [account_id as &str],
+            |r| r.get(0),
+        )
+        .map_err(db_err)?;
+    Ok(count.max(0) as usize)
 }
 
 fn subject_or_placeholder(subject: &str) -> String {
@@ -301,6 +399,60 @@ mod tests {
         save(&fix, std::slice::from_mut(&mut a));
         save(&fix, std::slice::from_mut(&mut b));
         assert_eq!(a.thread_id, b.thread_id);
+    }
+
+    #[test]
+    fn groups_by_server_thread_key() {
+        let fix = fixture();
+        let mut a = msg(&fix, "1", "A");
+        a.server_thread_key = Some("gmail-thrid:42".to_string());
+        // No headers tying these together and a different subject — only the
+        // server key can join them.
+        let mut b = msg(&fix, "2", "B");
+        b.server_thread_key = Some("gmail-thrid:42".to_string());
+        save(&fix, std::slice::from_mut(&mut a));
+        save(&fix, std::slice::from_mut(&mut b));
+        assert_eq!(a.thread_id, b.thread_id);
+    }
+
+    #[test]
+    fn groups_by_thread_index_root() {
+        let fix = fixture();
+        let mut a = msg(&fix, "1", "A");
+        a.thread_index_root = Some("0102030405060708090a0b0c0d0e0f10".to_string());
+        let mut b = msg(&fix, "2", "B");
+        b.thread_index_root = Some("0102030405060708090a0b0c0d0e0f10".to_string());
+        save(&fix, std::slice::from_mut(&mut a));
+        save(&fix, std::slice::from_mut(&mut b));
+        assert_eq!(a.thread_id, b.thread_id);
+    }
+
+    #[test]
+    fn rebuild_regroups_everything() {
+        let fix = fixture();
+        let mut a = msg(&fix, "1", "Weekly");
+        let mut b = msg(&fix, "2", "Re: Weekly");
+        save(&fix, std::slice::from_mut(&mut a));
+        let orphan_thread = {
+            let conn = fix.db.lock();
+            let id = create(&conn, &"acc".to_string(), "Re: Weekly").unwrap();
+            b.thread_id = Some(id.clone());
+            crate::message_repo::upsert_many(&conn, std::slice::from_mut(&mut b)).unwrap();
+            id
+        };
+        assert_ne!(a.thread_id.as_deref(), b.thread_id.as_deref());
+
+        let count = {
+            let conn = fix.db.lock();
+            rebuild(&conn, &"acc".to_string()).unwrap()
+        };
+        assert_eq!(count, 1);
+        assert!(get(&fix.db.lock(), &orphan_thread).unwrap().is_none());
+
+        let conn = fix.db.lock();
+        let regrouped = crate::message_repo::get(&conn, &a.id).unwrap().unwrap();
+        let ids = message_ids(&conn, regrouped.thread_id.as_deref().unwrap()).unwrap();
+        assert_eq!(ids.len(), 2);
     }
 
     #[test]

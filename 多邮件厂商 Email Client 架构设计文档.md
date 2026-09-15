@@ -880,6 +880,16 @@ Thread
 
 否则 Gmail / IMAP 没有同样的概念时会很难处理。
 
+实现补充（Phase 1 已落地）：本地归组按五级信号依次回退——
+
+1. RFC 5322 祖先链：`In-Reply-To` → `References`（倒序前 10 条）查已知 `Message-ID`；
+2. 服务端线程 key：Gmail 经 IMAP 扩展取 `X-GM-THRID`，或 RFC 5256 `THREAD=REFERENCES` 分组（key 取组内最小 UID），存储为 `messages.server_thread_key`；
+3. Outlook `Thread-Index` 头前 16 字节 GUID（`messages.thread_index_root`）；
+4. 归一化主题（剥 `Re:`/`Fwd:`/`答复:`/`转发:` 前缀与 `[list-tag]`）；
+5. 新建线程。
+
+`X-GM-THRID` 与 `THREAD` 响应无法经过 imap crate 的解析器（封闭枚举，遇到未知行会中止读取并毒化会话），因此在一条专用原始连接上手工解析（见 `crates/eeeemail-provider/src/imap/extensions.rs`），失败仅降级为本地归组。回复发件时会带 `In-Reply-To`/`References` 头，保证我们的回复也能正确归入会话。
+
 ---
 
 # 18. Sync Architecture

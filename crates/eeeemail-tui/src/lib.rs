@@ -24,7 +24,7 @@ use ratatui::crossterm::terminal::{
 };
 use ratatui::Terminal;
 
-pub use state::{ComposeForm, Focus, Overlay, State};
+pub use state::{ComposeForm, Focus, ListMode, OpenThread, Overlay, State};
 
 /// Take over the terminal until the user quits.
 pub fn run(app: eeeemail_core::App) -> Result<()> {
@@ -33,7 +33,7 @@ pub fn run(app: eeeemail_core::App) -> Result<()> {
 
     // First run: nothing is in the database yet, so fetch immediately rather
     // than showing an empty window.
-    if state.folders.is_empty() {
+    if !state.has_any_folders() {
         state.start_sync();
     }
 
@@ -97,8 +97,12 @@ fn handle_normal_key(st: &mut State, key: KeyEvent) {
         KeyCode::Char('q') => st.quit = true,
 
         KeyCode::Esc => {
-            st.clear_query();
-            st.status = None;
+            if st.open_thread.is_some() {
+                st.close_thread();
+            } else {
+                st.clear_query();
+                st.status = None;
+            }
         }
 
         KeyCode::Tab => st.focus = st.focus.next(),
@@ -123,12 +127,23 @@ fn handle_normal_key(st: &mut State, key: KeyEvent) {
                 st.reload_messages();
                 st.focus = Focus::List;
             }
-            Focus::List => st.open_message(),
+            Focus::List => {
+                // In the conversation view, Enter first drills into the
+                // highlighted conversation; inside one it opens the message.
+                if st.list_mode == ListMode::Threads && st.open_thread.is_none() {
+                    st.open_selected_thread();
+                } else {
+                    st.open_message();
+                }
+            }
             Focus::Preview => {}
         },
 
         // Fetch mail: the whole point of having a client.
         KeyCode::Char('f') | KeyCode::F(5) => st.start_sync(),
+
+        // Toggle between the flat message list and conversations.
+        KeyCode::Char('t') => st.toggle_list_mode(),
 
         KeyCode::Char('a') => {
             st.cycle_account(-1);

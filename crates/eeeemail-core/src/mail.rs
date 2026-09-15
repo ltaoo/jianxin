@@ -57,6 +57,17 @@ impl<'a> MailService<'a> {
         store::message_repo::list(&self.app.db().lock(), folder_id, limit, offset, unread_only)
     }
 
+    /// Every account's mail in one list, one row per real message (folder
+    /// copies collapsed) — the TUI's "All Email" view.
+    pub fn list_all(&self, limit: u32, offset: u32, unread_only: bool) -> Result<Vec<Message>> {
+        store::message_repo::list_all(&self.app.db().lock(), limit, offset, unread_only)
+    }
+
+    /// Unread count behind the "All Email" row of the folder pane.
+    pub fn count_all_unread(&self) -> Result<u64> {
+        store::message_repo::count_all_unread(&self.app.db().lock())
+    }
+
     pub fn count(&self, folder_id: &str, unread_only: bool) -> Result<u64> {
         store::message_repo::count(&self.app.db().lock(), folder_id, unread_only)
     }
@@ -173,6 +184,11 @@ impl<'a> MailService<'a> {
         store::message_repo::search(&self.app.db().lock(), account_id, query, limit)
     }
 
+    /// Local search spanning every configured account.
+    pub fn search_all_local(&self, query: &str, limit: u32) -> Result<Vec<Message>> {
+        store::message_repo::search_all(&self.app.db().lock(), query, limit)
+    }
+
     /// Server-side search when the provider has it (§27): broader reach,
     /// because it can match messages we have not synced yet.
     pub fn search_server(&self, cfg: &AccountConfig, query: &SearchQuery) -> Result<Vec<Message>> {
@@ -243,6 +259,75 @@ impl<'a> MailService<'a> {
                 format!("`{hint}` is ambiguous ({n} matches)"),
             )),
         }
+    }
+
+    /// Locally grouped conversations, most recent activity first.
+    pub fn threads(
+        &self,
+        account_id: &str,
+        limit: u32,
+        offset: u32,
+        unread_only: bool,
+    ) -> Result<Vec<Thread>> {
+        store::thread_repo::list(
+            &self.app.db().lock(),
+            account_id,
+            limit,
+            offset,
+            unread_only,
+        )
+    }
+
+    /// Conversations of every account merged, most recent activity first.
+    pub fn threads_all(&self, limit: u32, offset: u32, unread_only: bool) -> Result<Vec<Thread>> {
+        store::thread_repo::list_all(&self.app.db().lock(), limit, offset, unread_only)
+    }
+
+    /// Wipe and rebuild every local thread of an account from what is stored,
+    /// returning the resulting thread count. Useful after grouping rules
+    /// improve: new mail picks them up, old mail needs this.
+    pub fn rebuild_threads(&self, account_id: &str) -> Result<usize> {
+        let account_id = account_id.to_string();
+        self.app
+            .db()
+            .transaction(|conn| store::thread_repo::rebuild(conn, &account_id))
+    }
+
+    /// Convenience used by the CLI: thread id or unique prefix → thread. A
+    /// message id/prefix also works and resolves to that message's thread.
+    pub fn resolve_thread(&self, account_id: &str, hint: &str) -> Result<Thread> {
+        let mut prefix_matches: Vec<Thread> = {
+            let conn = self.app.db().lock();
+            if let Some(thread) = store::thread_repo::get(&conn, hint)? {
+                if thread.account_id == account_id {
+                    return Ok(thread);
+                }
+            }
+            store::thread_repo::list(&conn, account_id, u32::MAX, 0, false)?
+                .into_iter()
+                .filter(|t| !hint.is_empty() && t.id.starts_with(hint))
+                .collect()
+        };
+        match prefix_matches.len() {
+            1 => return Ok(prefix_matches.pop().unwrap()),
+            0 => {}
+            n => {
+                return Err(eeeemail_domain::MailError::new(
+                    eeeemail_domain::MailErrorCode::MessageNotFound,
+                    format!("`{hint}` is ambiguous ({n} threads match)"),
+                ))
+            }
+        }
+
+        // Fall back to the thread of whatever message the hint points at.
+        let message = self.resolve_message(account_id, hint)?;
+        let thread_id = message.thread_id.clone().ok_or_else(|| {
+            eeeemail_domain::MailError::new(
+                eeeemail_domain::MailErrorCode::MessageNotFound,
+                format!("message `{hint}` belongs to no thread"),
+            )
+        })?;
+        Ok(self.thread(account_id, &thread_id)?.thread)
     }
 
     /// Load one locally grouped conversation, oldest message first.

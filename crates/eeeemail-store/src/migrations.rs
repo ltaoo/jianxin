@@ -19,7 +19,7 @@ use eeeemail_domain::{MailError, MailErrorCode, Result};
 use rusqlite::Connection;
 
 /// Current `PRAGMA user_version`. Bump whenever a `SCHEMA_V*` block is added.
-pub const LATEST_VERSION: u32 = 2;
+pub const LATEST_VERSION: u32 = 3;
 
 /// Everything needed to create a database from scratch.
 const SCHEMA_V1: &str = r#"
@@ -172,6 +172,18 @@ CREATE TABLE IF NOT EXISTS mail_events (
 CREATE INDEX IF NOT EXISTS idx_mail_events_pending ON mail_events(delivered_at, detected_at);
 "#;
 
+/// Threading signals beyond RFC 5322 headers: the Outlook `Thread-Index` root
+/// and provider thread keys (`gmail-thrid:…`, `imap-thread:…`), plus the index
+/// the ancestor lookup always needed.
+const SCHEMA_V3: &str = r#"
+ALTER TABLE messages ADD COLUMN thread_index_root TEXT;
+ALTER TABLE messages ADD COLUMN server_thread_key TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_messages_msgid      ON messages(account_id, message_id_header);
+CREATE INDEX IF NOT EXISTS idx_messages_thread_key ON messages(account_id, server_thread_key);
+CREATE INDEX IF NOT EXISTS idx_messages_tidx_root  ON messages(account_id, thread_index_root);
+"#;
+
 /// Apply any outstanding migrations.
 ///
 /// Runs inside a single transaction so an interrupted upgrade cannot leave a
@@ -193,6 +205,9 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
     }
     if current < 2 {
         tx.execute_batch(SCHEMA_V2).map_err(db_err)?;
+    }
+    if current < 3 {
+        tx.execute_batch(SCHEMA_V3).map_err(db_err)?;
     }
     tx.pragma_update(None, "user_version", LATEST_VERSION)
         .map_err(db_err)?;
@@ -217,6 +232,11 @@ mod tests {
             let mut conn = db.lock();
             conn.execute_batch(
                 "DROP TABLE mail_events;
+                 DROP INDEX IF EXISTS idx_messages_msgid;
+                 DROP INDEX IF EXISTS idx_messages_thread_key;
+                 DROP INDEX IF EXISTS idx_messages_tidx_root;
+                 ALTER TABLE messages DROP COLUMN thread_index_root;
+                 ALTER TABLE messages DROP COLUMN server_thread_key;
                  PRAGMA user_version = 1;",
             )
             .map_err(db_err)
@@ -225,7 +245,7 @@ mod tests {
             let version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 2);
+            assert_eq!(version, LATEST_VERSION);
             let columns: i64 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM pragma_table_info('mail_events')",
@@ -234,6 +254,55 @@ mod tests {
                 )
                 .unwrap();
             assert_eq!(columns, 5);
+        }
+    }
+
+    #[test]
+    fn upgrades_v2_databases_to_threading_signals() {
+        let db = crate::Database::open_in_memory().unwrap();
+        {
+            let mut conn = db.lock();
+            // The DB above is already at LATEST_VERSION; unwind the v3 changes
+            // so the upgrade under test starts from an honest v2 shape.
+            conn.execute_batch(
+                "DROP INDEX IF EXISTS idx_messages_msgid;
+                 DROP INDEX IF EXISTS idx_messages_thread_key;
+                 DROP INDEX IF EXISTS idx_messages_tidx_root;
+                 ALTER TABLE messages DROP COLUMN thread_index_root;
+                 ALTER TABLE messages DROP COLUMN server_thread_key;
+                 PRAGMA user_version = 2;",
+            )
+            .map_err(db_err)
+            .unwrap();
+            migrate(&mut conn).unwrap();
+            let version: u32 = conn
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(version, 3);
+            for column in ["thread_index_root", "server_thread_key"] {
+                let found: i64 = conn
+                    .query_row(
+                        &format!(
+                            "SELECT COUNT(*) FROM pragma_table_info('messages')
+                              WHERE name = '{column}'"
+                        ),
+                        [],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                assert_eq!(found, 1, "messages.{column} missing after migration");
+            }
+            let indexes: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index'
+                      AND name IN ('idx_messages_msgid',
+                                   'idx_messages_thread_key',
+                                   'idx_messages_tidx_root')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(indexes, 3);
         }
     }
 }

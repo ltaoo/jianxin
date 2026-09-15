@@ -61,9 +61,9 @@ pub fn build_message(message: &ComposeMessage, from: &Address) -> Result<Message
 
     if let Some(in_reply_to) = &message.in_reply_to {
         builder = builder.in_reply_to(in_reply_to.clone());
-        if !message.references.is_empty() {
-            builder = builder.references(message.references.join(" "));
-        }
+    }
+    if !message.references.is_empty() {
+        builder = builder.references(message.references.join(" "));
     }
 
     let plain = message.text_body.clone().unwrap_or_default();
@@ -85,7 +85,11 @@ pub fn build_message(message: &ComposeMessage, from: &Address) -> Result<Message
             .header(content_type("text/html; charset=utf-8")?)
             .body(html.unwrap_or_default());
         return builder
-            .multipart(MultiPart::alternative().singlepart(text_part()?).singlepart(html_part))
+            .multipart(
+                MultiPart::alternative()
+                    .singlepart(text_part()?)
+                    .singlepart(html_part),
+            )
             .map_err(|e| MailError::new(MailErrorCode::SendFailed, format!("build message: {e}")));
     }
 
@@ -103,10 +107,10 @@ pub fn build_message(message: &ComposeMessage, from: &Address) -> Result<Message
         } else {
             attachment.mime_type.clone()
         };
-        mixed = mixed.singlepart(Attachment::new(attachment.filename.clone()).body(
-            attachment.data.clone(),
-            content_type(&mime)?,
-        ));
+        mixed = mixed.singlepart(
+            Attachment::new(attachment.filename.clone())
+                .body(attachment.data.clone(), content_type(&mime)?),
+        );
     }
 
     builder

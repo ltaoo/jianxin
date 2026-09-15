@@ -192,6 +192,15 @@ struct ThreadArgs {
 }
 
 #[derive(Deserialize)]
+struct ThreadListArgs {
+    account_id: String,
+    #[serde(default = "default_limit")]
+    limit: u32,
+    #[serde(default)]
+    unread: Option<bool>,
+}
+
+#[derive(Deserialize)]
 struct SyncArgs {
     account_id: String,
     #[serde(default)]
@@ -447,6 +456,20 @@ fn tool_specs() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "mail_list_threads",
+            "description": "List locally grouped conversations for an account, most recent activity first.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account_id": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20},
+                    "unread": {"type": "boolean", "default": false, "description": "Only conversations with unread messages"}
+                },
+                "required": ["account_id"],
+                "additionalProperties": false
+            }
+        }),
+        json!({
             "name": "mail_sync_account",
             "description": "Run an incremental remote sync for one account. This is a network operation.",
             "inputSchema": {
@@ -480,6 +503,7 @@ fn call_tool(state: &mut ServerState, name: &str, arguments: Value) -> Result<Va
                 "mail_search_messages" => search_messages(app, decode(arguments)?),
                 "mail_get_message" => get_message(app, decode(arguments)?),
                 "mail_get_thread" => get_thread(app, decode(arguments)?),
+                "mail_list_threads" => list_threads(app, decode(arguments)?),
                 "mail_sync_account" => sync_account(app, decode(arguments)?),
                 _ => Err(MailError::new(
                     MailErrorCode::InvalidConfig,
@@ -910,10 +934,26 @@ fn get_thread(app: &App, args: ThreadArgs) -> Result<Value> {
     let account = cfg.to_account();
     let detail = app.mail().thread(&account.id, &args.thread_id)?;
     Ok(json!({
-        "thread": thread_view(&detail.thread, detail.messages.len()),
+        "thread": thread_view(&detail.thread),
         "messages": detail.messages.iter().map(|message| {
             message_detail(message, args.include_body, false)
         }).collect::<Vec<_>>()
+    }))
+}
+
+fn list_threads(app: &App, args: ThreadListArgs) -> Result<Value> {
+    let cfg = app.resolve_account(Some(&args.account_id))?;
+    let account = cfg.to_account();
+    let threads = app.mail().threads(
+        &account.id,
+        args.limit.clamp(1, 100),
+        0,
+        args.unread.unwrap_or(false),
+    )?;
+    Ok(json!({
+        "account_id": cfg.alias(),
+        "count": threads.len(),
+        "threads": threads.iter().map(thread_view).collect::<Vec<_>>()
     }))
 }
 
@@ -948,11 +988,11 @@ fn folder_view(folder: &eeeemail_domain::Folder) -> Value {
     })
 }
 
-fn thread_view(thread: &Thread, message_count: usize) -> Value {
+fn thread_view(thread: &Thread) -> Value {
     json!({
         "id": thread.id,
         "subject": thread.subject,
-        "message_count": message_count,
+        "message_count": thread.message_count,
         "unread_count": thread.unread_count,
         "last_message_at": thread.last_message_at
     })
@@ -1068,6 +1108,7 @@ mod tests {
                 "mail_search_messages",
                 "mail_get_message",
                 "mail_get_thread",
+                "mail_list_threads",
                 "mail_sync_account"
             ]
         );
@@ -1181,5 +1222,6 @@ mod tests {
         let mut messages = vec![message];
         thread_repo::assign(&conn, &account_id, &mut messages).unwrap();
         message_repo::upsert_many(&conn, &messages).unwrap();
+        thread_repo::recompute_for(&conn, &messages).unwrap();
     }
 }

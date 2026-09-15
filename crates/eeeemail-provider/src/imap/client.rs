@@ -155,6 +155,17 @@ impl ImapClient {
 
     // --- reading ----------------------------------------------------------
 
+    /// Whether the server advertises the given capability atom, e.g.
+    /// `THREAD=REFERENCES` (RFC 5256) or `X-GM-EXT-1` (Gmail extensions).
+    /// Servers see an unknown atom as a missing one, so this is safe to call
+    /// speculatively.
+    pub fn has_capability(&mut self, name: &str) -> bool {
+        self.session
+            .capabilities()
+            .map(|caps| caps.has_str(name))
+            .unwrap_or(false)
+    }
+
     /// `UID SEARCH <criteria>` as a sorted uid list.
     pub fn uid_search(&mut self, criteria: &str) -> Result<Vec<u32>> {
         let uids = self.session.uid_search(criteria).map_err(imap_err)?;
@@ -303,8 +314,7 @@ pub fn imap_err(err: imap::Error) -> MailError {
                 MailErrorCode::NetworkUnavailable
             },
             format!("imap i/o error: {io}"),
-        )
-        ,
+        ),
         imap::Error::ConnectionLost => MailError::new(
             MailErrorCode::NetworkUnavailable,
             "imap connection lost".to_string(),
