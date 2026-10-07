@@ -1,0 +1,41 @@
+[package]
+name = "jianxin-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "jianxin command line interface"
+default-run = "jianxin"
+
+[[bin]]
+name = "jianxin"
+path = "src/main.rs"
+
+[dependencies]
+jianxin-agent = { workspace = true }
+jianxin-config = { workspace = true }
+jianxin-core = { workspace = true }
+jianxin-domain = { workspace = true }
+jianxin-provider = { workspace = true }
+jianxin-store = { workspace = true }
+jianxin-tui = { workspace = true }
+
+anyhow.workspace = true
+chrono.workspace = true
+dotenvy.workspace = true
+dirs.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+ureq.workspace = true
+uuid.workspace = true
+ammonia = "4.2"
+tiny_http = "0.12"
+subtle = "2.6"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+notify-rust = "4.18"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = ["Data_Xml_Dom", "UI_Notifications"] }

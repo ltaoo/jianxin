@@ -1,0 +1,19 @@
+[package]
+name = "jianxin-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Application layer: mail / sync / search / compose / outbox services"
+
+[dependencies]
+jianxin-config = { workspace = true }
+jianxin-domain = { workspace = true }
+jianxin-provider = { workspace = true }
+jianxin-store = { workspace = true }
+
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true

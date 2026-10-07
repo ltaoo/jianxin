@@ -1,0 +1,20 @@
+[package]
+name = "jianxin-agent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Read-first MCP tool server for agents"
+
+[dependencies]
+jianxin-config = { workspace = true }
+jianxin-core = { workspace = true }
+jianxin-domain = { workspace = true }
+
+anyhow.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+jianxin-config = { workspace = true }
+jianxin-store = { workspace = true }

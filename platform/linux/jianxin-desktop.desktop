@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=简信
+Comment=查看最新未读邮件
+Exec=jianxin-desktop
+Icon=jianxin
+Terminal=false
+Categories=Network;Email;
+StartupWMClass=com.jianxin.mail
+X-GNOME-UsesNotifications=true

@@ -1,0 +1,16 @@
+[package]
+name = "jianxin-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "JSON account configuration, secret resolution and provider presets"
+
+[dependencies]
+jianxin-domain = { workspace = true }
+
+chrono.workspace = true
+dirs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

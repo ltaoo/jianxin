@@ -1,0 +1,348 @@
+{
+  "schema": "design.v1",
+  "name": "jianxin-jxui",
+  "version": "1.6.3",
+  "status": "evolve",
+  "updated_at": "2026-10-03",
+  "agent": {
+    "skill": "design",
+    "instructions": "Read this contract before UI changes. Build pages with jxui components and Timeless store-driven models. Bind tokens; update the catalog when adding components; verify CSS against tokens. Never automate a browser."
+  },
+  "overview": "Agentic Inbox inspired local email reader: recessed sidebar, dense conversation rows, white split reading surface, restrained blue actions. Keep actual Jianxin accounts and local mail semantics.",
+  "intent": {
+    "reference": "https://github.com/cloudflare/agentic-inbox (demo_app.png, Sidebar.tsx, Header.tsx, MailboxSplitView.tsx, email-list.tsx)",
+    "direction": "Quiet, compact mail workspace with a persistent mailbox sidebar and a 380px conversation list when reading.",
+    "signature": "Timeless official outline icons, blue selected navigation, tinted sender avatars and a compact activity notification center.",
+    "treatment": "utilitarian"
+  },
+  "constraints": {
+    "always": [
+      "Use real local data; render empty/loading/error states.",
+      "Use native buttons and labelled controls with visible keyboard focus.",
+      "Isolate email HTML in sandboxed iframes.",
+      "Use Model methods for all state transitions; clean up subscriptions.",
+      "Keep mobile single-pane reading and 44px touch targets."
+    ],
+    "never": [
+      "Mock inbox data or nonfunctional actions.",
+      "External font or runtime CDN requests.",
+      "Email HTML in the trusted component tree.",
+      "AI chat, compose, or destructive controls without corresponding authorized backend scope.",
+      "Browser automation."
+    ]
+  },
+  "policy": {
+    "if_missing": "invent_with_note",
+    "hierarchy": [
+      "typography",
+      "spacing",
+      "contrast",
+      "color"
+    ]
+  },
+  "voice": {
+    "language": "zh-CN",
+    "register": "Concise and direct",
+    "terminology": {
+      "thread": "对话",
+      "inbox": "收件箱",
+      "read": "已读"
+    },
+    "errors": "Explain the failure and offer retry. Never show credentials or internal stack traces."
+  },
+  "themes": {
+    "single": "light",
+    "desktop": {
+      "mode": "system",
+      "light": "tokens.color",
+      "dark": {
+        "color": {
+          "canvas": "#161b22",
+          "text": "#e6edf3",
+          "muted": "#9da7b3",
+          "fill": "#252d38",
+          "hover": "#2d3744",
+          "line": "#394454",
+          "primary": "#216de0",
+          "primaryHover": "#1565d8",
+          "primaryForeground": "#ffffff",
+          "danger": "#ff8d91",
+          "focus": "#70a7ff"
+        }
+      }
+    }
+  },
+  "tokens": {
+    "color": {
+      "canvas": "#ffffff",
+      "recessed": "#f6f8fc",
+      "fill": "#eaf0f8",
+      "hover": "#f4f7fb",
+      "line": "#e4e9f0",
+      "text": "#172337",
+      "muted": "#627086",
+      "primary": "#0066ff",
+      "primaryHover": "#0052cc",
+      "selected": "#eaf2ff",
+      "danger": "#b42318",
+      "success": "#18733d",
+      "focus": "#0066ff",
+      "warning": "#8a5700",
+      "blueTint": "#e8f0ff",
+      "blueText": "#2757a5",
+      "greenTint": "#e7f4ee",
+      "greenText": "#28634a",
+      "violetTint": "#f0ebfa",
+      "violetText": "#715396",
+      "amberTint": "#fff2df",
+      "amberText": "#866023",
+      "primaryForeground": "#ffffff"
+    },
+    "font": {
+      "body": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+      "utility": "ui-monospace, SFMono-Regular, Menlo, monospace"
+    },
+    "type": {
+      "caption": "0.8125rem",
+      "control": "0.875rem",
+      "body": "1rem",
+      "heading": "1.125rem",
+      "display": "1.375rem"
+    },
+    "spacing": {
+      "1": "0.25rem",
+      "2": "0.5rem",
+      "3": "0.75rem",
+      "4": "1rem",
+      "5": "1.25rem",
+      "6": "1.5rem",
+      "8": "2rem",
+      "12": "3rem"
+    },
+    "radius": {
+      "control": "0.625rem",
+      "pill": "999px",
+      "panel": "0.875rem"
+    },
+    "layout": {
+      "sidebar": "18rem",
+      "list": "23.75rem",
+      "toolbar": "3.5rem",
+      "target": "2.75rem",
+      "row": "6.5rem",
+      "reading": "65ch",
+      "mobile": "48rem",
+      "compact": "70rem",
+      "search": "42rem",
+      "compactSidebar": "13rem",
+      "compactList": "20rem",
+      "empty": "16rem",
+      "emptyMeasure": "32ch",
+      "notification": "24rem",
+      "agent-width": "24rem",
+      "agent-editor-height": "6rem",
+      "agent-z": "40",
+      "trayHeight": "35rem"
+    },
+    "elevation": {
+      "flat": "none",
+      "popover": "0 12px 40px rgba(23,35,55,0.16)"
+    },
+    "motion": {
+      "duration": "120ms",
+      "easing": "ease-out"
+    },
+    "sound": {
+      "enabled": false
+    },
+    "border": {
+      "width": "1px",
+      "focus": "2px",
+      "selection": "3px"
+    },
+    "z": {
+      "sidebar": "10",
+      "skip": "20",
+      "notification": "30"
+    }
+  },
+  "components": {
+    "Button": {
+      "variants": [
+        "primary",
+        "secondary",
+        "ghost"
+      ],
+      "height": "{tokens.layout.target}",
+      "rounded": "{tokens.radius.control}",
+      "typography": "{tokens.type.control}",
+      "when": "Actions with a store",
+      "when_not": "Navigation links"
+    },
+    "Input": {
+      "backgroundColor": "{tokens.color.canvas}",
+      "textColor": "{tokens.color.text}",
+      "height": "{tokens.layout.target}",
+      "rounded": "{tokens.radius.control}",
+      "when": "Search text entry"
+    },
+    "Badge": {
+      "backgroundColor": "{tokens.color.fill}",
+      "textColor": "{tokens.color.muted}",
+      "rounded": "{tokens.radius.pill}",
+      "typography": "{tokens.type.caption}"
+    },
+    "NavItem": {
+      "variants": [
+        "default",
+        "active"
+      ],
+      "height": "{tokens.layout.target}",
+      "rounded": "{tokens.radius.control}",
+      "counts": "Global all/unread navigation always shows reactive local message totals, including zero. Account folder items show nonzero unread counts."
+    },
+    "Avatar": {
+      "backgroundColor": "{tokens.color.fill}",
+      "textColor": "{tokens.color.muted}",
+      "rounded": "{tokens.radius.pill}"
+    },
+    "ConversationRow": {
+      "height": "{tokens.layout.row}",
+      "backgroundColor": "{tokens.color.canvas}",
+      "variants": [
+        "read",
+        "unread",
+        "selected"
+      ]
+    },
+    "Panel": {
+      "backgroundColor": "{tokens.color.canvas}",
+      "textColor": "{tokens.color.text}",
+      "variants": [
+        "sidebar",
+        "list",
+        "reader"
+      ]
+    },
+    "Toolbar": {
+      "height": "{tokens.layout.toolbar}",
+      "backgroundColor": "{tokens.color.canvas}"
+    },
+    "EmptyState": {
+      "typography": "{tokens.type.body}",
+      "textColor": "{tokens.color.muted}"
+    },
+    "MailMessage": {
+      "variants": [
+        "collapsed",
+        "expanded",
+        "pending",
+        "error"
+      ],
+      "when": "Metadata and sandboxed body with a per-message Core",
+      "behavior": "All loaded messages in a conversation expand by default. Successfully loaded bodies in a visible reader automatically sync read status; writes are queued. Manual unread remains until next reading session, and failed writes remain retryable. Read/unread writes are silent: no loading or success message and list refresh preserves visible content. Failures remain visible and retryable.",
+      "bodyHeight": "Body iframe grows to measured content height without a maximum height; ResizeObserver updates the height after layout or image changes."
+    },
+    "Select": {
+      "height": "{tokens.layout.target}",
+      "rounded": "{tokens.radius.control}",
+      "when": "Account selection"
+    },
+    "MailboxGroup": {
+      "when": "Always-visible account name and last sync outcome above account-scoped folders",
+      "variants": [
+        "expanded",
+        "collapsed",
+        "active"
+      ],
+      "backgroundColor": "{tokens.color.recessed}",
+      "textColor": "{tokens.color.text}",
+      "typography": "{tokens.type.control}",
+      "height": "{tokens.layout.target}"
+    },
+    "Glyph": {
+      "when": "Semantic UI icons via Timeless.Icon and the selected @timeless/inner-icons ASN registry",
+      "source": "frontend/vendor/timeless-icons.js"
+    },
+    "NotificationCenter": {
+      "when": "Bounded error history, unread count, per-item read/unread and read all",
+      "backgroundColor": "{tokens.color.canvas}",
+      "rounded": "{tokens.radius.panel}"
+    },
+    "RelativeTime": {
+      "when": "Relative mail and notification timestamps with exact date tooltip"
+    },
+    "AgentPanel": {
+      "when": "Account-scoped chat, read-tool activity, editable replies requiring explicit draft-save confirmation; plain text model output; Agent/MCP tabs",
+      "width": "{tokens.layout.agent-width}",
+      "backgroundColor": "{tokens.color.canvas}"
+    },
+    "UnreadTrayPanel": {
+      "when": "Native GPUI Kit window opened from system tray; latest 30 unread messages across accounts, local refresh every 5 seconds, title/time/mailbox, accessible open controls and loading/empty/error states",
+      "width": "{tokens.layout.notification}",
+      "height": "{tokens.layout.trayHeight}",
+      "backgroundColor": "{tokens.color.canvas}",
+      "textColor": "{tokens.color.text}",
+      "typography": "{tokens.type.control}",
+      "theme": "Follow system appearance at creation and while open; desktop dark colors use themes.desktop.dark.color, including text, errors, button hover, borders and scrollbars.",
+      "footer": "Reader and refresh actions on the left; the bottom-right exit button stops background mail polling before quitting the desktop app. Failure keeps the app open with a retryable error. The tray menu exit action uses the same complete shutdown.",
+      "rowContextMenu": "Mail rows have no hover tooltip and no left-click navigation. Right-click menu 在浏览器中打开 opens that exact message in the existing Web reader; follows current desktop theme."
+    }
+  },
+  "patterns": {
+    "inbox": {
+      "treatment": "utilitarian",
+      "layout": "18rem sidebar + flexible list; selected conversation opens a flexible reader and narrows list to 23.75rem. On mobile, show list or reader, with an explicit back button. The sidebar lists every mailbox and its own folders at once, with shared TUI/Web last-sync status; no mailbox dropdown."
+    },
+    "agent": {
+      "layout": "Persistent 24rem right panel; below compact breakpoint use dismissible overlay. Opening loads history only; sending invokes configured model.",
+      "behavior": "Never send messages automatically. Stop cancels subsequent processing; in-flight provider requests have a bounded timeout."
+    }
+  },
+  "sources": [
+    {
+      "path": "https://github.com/cloudflare/agentic-inbox",
+      "revision": "48039bb6785af34e592c2966f87cde2b255c4c80",
+      "scanned": [
+        "demo_app.png",
+        "app/index.css",
+        "app/components/Sidebar.tsx",
+        "app/components/Header.tsx",
+        "app/components/MailboxSplitView.tsx",
+        "app/routes/email-list.tsx",
+        "app/components/AgentPanel.tsx",
+        "app/components/AgentSidebar.tsx",
+        "workers/agent/index.ts"
+      ]
+    },
+    {
+      "path": "crates/jianxin-cli/src/web.css",
+      "purpose": "Existing CSS approach and reader behaviors"
+    },
+    {
+      "path": "/Users/litao/Documents/workspace/timeless/.claude/skills/timeless/SKILL.md",
+      "purpose": "Store-driven models and component lifecycle"
+    },
+    {
+      "path": "crates/jianxin-tui/src/ui.rs",
+      "purpose": "Multiple account rows, folders and shared account sync status"
+    },
+    {
+      "path": "/Users/litao/Documents/workspace/timeless/packages/icons/src/asn",
+      "purpose": "Official Timeless icon definitions used through the framework Icon primitive"
+    },
+    {
+      "path": "crates/jianxin-desktop/src/theme.rs",
+      "purpose": "Native GPUI theme consumes the same design tokens at build time"
+    }
+  ],
+  "exports": {
+    "css": "frontend/dist/app.css"
+  },
+  "locked": [],
+  "omitted": [
+    "Web dark theme",
+    "sound",
+    "mail sending and full composer"
+  ]
+}

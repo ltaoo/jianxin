@@ -1,8 +1,10 @@
 # Agent / MCP 使用指南
 
-`eeeemail agent` 提供一个运行在 stdio 上的 MCP Server，用于让外部 Agent 管理邮箱账号、同步邮件、搜索本地索引和读取邮件内容。
+`jianxin agent` 提供一个运行在 stdio 上的 MCP Server，用于让外部 Agent 管理邮箱账号、同步邮件、搜索本地索引和读取邮件内容。
 
-当前设计是 **read-first**：Agent 不能发送邮件、删除邮件、移动邮件，也不能读取或传入明文凭证。
+Web 内置邮件助手及模型配置见 [Web 邮件 Agent](web.md#邮件-agent)。右侧 MCP 标签会提供当前 CLI 的客户端配置。
+
+当前 MCP 设计是 **read-first**：Agent 不能发送邮件、删除邮件、移动邮件，也不能读取或传入明文凭证。
 
 ## 1. 构建和准备配置
 
@@ -13,21 +15,21 @@ cargo build --release
 二进制文件：
 
 ```text
-target/release/eeeemail
+target/release/jianxin
 ```
 
 如果没有配置文件，先创建一个空账号配置：
 
 ```sh
-mkdir -p ~/.config/eeeemail
+mkdir -p ~/.config/jianxin
 
-cat > ~/.config/eeeemail/config.json <<'EOF'
+cat > ~/.config/jianxin/config.json <<'EOF'
 {
   "accounts": []
 }
 EOF
 
-chmod 600 ~/.config/eeeemail/config.json
+chmod 600 ~/.config/jianxin/config.json
 ```
 
 `config.json` 是账号配置和 OAuth 登录状态的迁移入口。该文件可能包含长期凭证，必须保持 owner-only 权限。
@@ -41,8 +43,8 @@ chmod 600 ~/.config/eeeemail/config.json
 ```json
 {
   "mcpServers": {
-    "eeeemail": {
-      "command": "/absolute/path/to/eeeemail",
+    "jianxin": {
+      "command": "/absolute/path/to/jianxin",
       "args": [
         "--config",
         "/absolute/path/to/config.json",
@@ -58,11 +60,11 @@ chmod 600 ~/.config/eeeemail/config.json
 ```json
 {
   "mcpServers": {
-    "eeeemail": {
-      "command": "/Users/mayfair/Documents/other/eeeemail/target/release/eeeemail",
+    "jianxin": {
+      "command": "/Users/mayfair/Documents/other/jianxin/target/release/jianxin",
       "args": [
         "--config",
-        "/Users/mayfair/.config/eeeemail/config.json",
+        "/Users/mayfair/.config/jianxin/config.json",
         "agent"
       ]
     }
@@ -73,11 +75,11 @@ chmod 600 ~/.config/eeeemail/config.json
 ### Codex TOML 配置格式
 
 ```toml
-[mcp_servers.eeeemail]
-command = "/Users/mayfair/Documents/other/eeeemail/target/release/eeeemail"
+[mcp_servers.jianxin]
+command = "/Users/mayfair/Documents/other/jianxin/target/release/jianxin"
 args = [
   "--config",
-  "/Users/mayfair/.config/eeeemail/config.json",
+  "/Users/mayfair/.config/jianxin/config.json",
   "agent"
 ]
 ```
@@ -158,7 +160,7 @@ Agent 可以添加 OAuth 账号，但不会接触 OAuth token，也不会代替�
 账号添加成功后执行：
 
 ```sh
-/absolute/path/to/eeeemail \
+/absolute/path/to/jianxin \
   --config /absolute/path/to/config.json \
   login \
   --account outlook
@@ -196,7 +198,7 @@ Agent 不能传入明文密码，只能传入 SecretRef。
   "auth": {
     "type": "app_password",
     "password": {
-      "keychain": "eeeemail/qq"
+      "keychain": "jianxin/qq"
     }
   }
 }
@@ -226,7 +228,7 @@ command
 
 这样可以避免 Agent 把密码或任意 shell 命令写入配置。
 
-如果使用 `env`，MCP Host 启动 `eeeemail agent` 时也必须能读到该环境变量。
+如果使用 `env`，MCP Host 启动 `jianxin agent` 时也必须能读到该环境变量。
 
 ## 6. 同步和搜索邮件
 
@@ -381,7 +383,7 @@ OAuth refresh token 已写入该 JSON，通常不需要重新登录。
 新设备需要：
 
 ```text
-1. 构建或复制 eeeemail 二进制
+1. 构建或复制 jianxin 二进制
 2. 复制 config.json
 3. 注册 MCP Server
 4. 调用 mail_sync_account 重新同步邮件
@@ -416,4 +418,4 @@ Agent 当前不可以：
 执行 shell command secret
 ```
 
-这使 `eeeemail agent` 可以安全地作为读优先的邮件知识入口，同时把发送和破坏性邮件操作留给后续带确认机制的独立工具。
+这使 `jianxin agent` 可以安全地作为读优先的邮件知识入口，同时把发送和破坏性邮件操作留给后续带确认机制的独立工具。

@@ -888,7 +888,7 @@ Thread
 4. 归一化主题（剥 `Re:`/`Fwd:`/`答复:`/`转发:` 前缀与 `[list-tag]`）；
 5. 新建线程。
 
-`X-GM-THRID` 与 `THREAD` 响应无法经过 imap crate 的解析器（封闭枚举，遇到未知行会中止读取并毒化会话），因此在一条专用原始连接上手工解析（见 `crates/eeeemail-provider/src/imap/extensions.rs`），失败仅降级为本地归组。回复发件时会带 `In-Reply-To`/`References` 头，保证我们的回复也能正确归入会话。
+`X-GM-THRID` 与 `THREAD` 响应无法经过 imap crate 的解析器（封闭枚举，遇到未知行会中止读取并毒化会话），因此在一条专用原始连接上手工解析（见 `crates/jianxin-provider/src/imap/extensions.rs`），失败仅降级为本地归组。回复发件时会带 `In-Reply-To`/`References` 头，保证我们的回复也能正确归入会话。
 
 ---
 

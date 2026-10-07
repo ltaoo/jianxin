@@ -1,0 +1,12 @@
+{
+  "framework": "Timeless",
+  "version": "0.34.0",
+  "source": "/Users/litao/Documents/workspace/timeless/dist/timeless/0.34.0",
+  "license": "MIT",
+  "files": {
+    "timeless.lite.umd.min.js": "8d3de61c3dc3d038fe3907e8e323452f1f7d1f0a491a2ad12a011ba73d8cca75",
+    "timeless.dom.umd.min.js": "8e13b5ef35bfb74570fc14b7745b83dc281a532cb2e147712d32dc314f1835b1",
+    "timeless-icons.js": "3461ed66e433d8609b5329e61569ee73915bc4f4545240e9d360fbe4126cae0c"
+  },
+  "icons_source": "/Users/litao/Documents/workspace/timeless/packages/icons/src/asn"
+}

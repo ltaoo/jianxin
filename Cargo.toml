@@ -1,20 +1,21 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/eeeemail-domain",
-  "crates/eeeemail-config",
-  "crates/eeeemail-provider",
-  "crates/eeeemail-store",
-  "crates/eeeemail-core",
-  "crates/eeeemail-agent",
-  "crates/eeeemail-tui",
-  "crates/eeeemail-cli",
+  "crates/jianxin-domain",
+  "crates/jianxin-config",
+  "crates/jianxin-provider",
+  "crates/jianxin-store",
+  "crates/jianxin-core",
+  "crates/jianxin-agent",
+  "crates/jianxin-tui",
+  "crates/jianxin-cli",
+  "crates/jianxin-desktop",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.89"
 description = "Multi-provider email client (CLI + TUI), Rust implementation"
 
 # ---------------------------------------------------------------------------
@@ -22,13 +23,13 @@ description = "Multi-provider email client (CLI + TUI), Rust implementation"
 # dependency graph stays a single copy.
 # ---------------------------------------------------------------------------
 [workspace.dependencies]
-eeeemail-domain = { path = "crates/eeeemail-domain" }
-eeeemail-config = { path = "crates/eeeemail-config" }
-eeeemail-provider = { path = "crates/eeeemail-provider" }
-eeeemail-store = { path = "crates/eeeemail-store" }
-eeeemail-core = { path = "crates/eeeemail-core" }
-eeeemail-agent = { path = "crates/eeeemail-agent" }
-eeeemail-tui = { path = "crates/eeeemail-tui" }
+jianxin-domain = { path = "crates/jianxin-domain" }
+jianxin-config = { path = "crates/jianxin-config" }
+jianxin-provider = { path = "crates/jianxin-provider" }
+jianxin-store = { path = "crates/jianxin-store" }
+jianxin-core = { path = "crates/jianxin-core" }
+jianxin-agent = { path = "crates/jianxin-agent" }
+jianxin-tui = { path = "crates/jianxin-tui" }
 
 anyhow = "1"
 thiserror = "2"
@@ -64,3 +65,10 @@ ratatui = "0.29"
 [profile.release]
 opt-level = 2
 strip = true
+
+# Smaller app bundle without changing the normal CLI release profile.
+[profile.macos-app]
+inherits = "release"
+opt-level = "s"
+lto = "thin"
+codegen-units = 1

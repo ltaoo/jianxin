@@ -194,14 +194,14 @@ scope
 }
 ```
 
-首次 `eeeemail login` 成功后，CLI 会把返回的 `refresh_token` 以字符串形式写回这个账号的 JSON 节点。access token 过期前 60 秒会主动刷新；如果服务商轮转 refresh token，新 token 也会写回 `config.json`。
+首次 `jianxin login` 成功后，CLI 会把返回的 `refresh_token` 以字符串形式写回这个账号的 JSON 节点。access token 过期前 60 秒会主动刷新；如果服务商轮转 refresh token，新 token 也会写回 `config.json`。
 
 ## CLI 使用
 
 首次登录：
 
 ```sh
-eeeemail login --account funzm@outlook.com
+jianxin login --account funzm@outlook.com
 ```
 
 CLI 会显示 Microsoft device code 登录地址和验证码，并把 refresh token 写入 `config.json`。文件在 Unix 上会设置为 `0600`；迁移设备时只需要复制这个 JSON 文件。
@@ -209,19 +209,19 @@ CLI 会显示 Microsoft device code 登录地址和验证码，并把 refresh to
 收信：
 
 ```sh
-eeeemail sync --account funzm@outlook.com
-eeeemail list --account funzm@outlook.com inbox
-eeeemail read --account funzm@outlook.com <message-id>
+jianxin sync --account funzm@outlook.com
+jianxin list --account funzm@outlook.com inbox
+jianxin read --account funzm@outlook.com <message-id>
 ```
 
 发信：
 
 ```sh
-eeeemail send \
+jianxin send \
   --account funzm@outlook.com \
   --to funzm@outlook.com \
   --subject 'CLI OAuth test' \
-  --body 'Sent by eeeemail CLI'
+  --body 'Sent by jianxin CLI'
 ```
 
 `sync`、`send`、`doctor` 等需要连网的命令会在建立 IMAP/SMTP 连接前刷新 access token，不需要单独执行 refresh 命令。
@@ -332,10 +332,10 @@ INBOX message count: 8
 测试邮件：
 
 ```text
-Subject: eeeemail OAuth test e80cb318
+Subject: jianxin OAuth test e80cb318
 From: funzm@outlook.com
 To: funzm@outlook.com
-Body: This is an end-to-end IMAP/SMTP OAuth2 test for eeeemail.
+Body: This is an end-to-end IMAP/SMTP OAuth2 test for jianxin.
 ```
 
 结果：
@@ -348,9 +348,9 @@ SMTP XOAUTH2 send: OK
 
 ```text
 IMAP after-send fetch: OK
-Subject: eeeemail OAuth test e80cb318
+Subject: jianxin OAuth test e80cb318
 From: funzm@outlook.com
-Body: This is an end-to-end IMAP/SMTP OAuth2 test for eeeemail.
+Body: This is an end-to-end IMAP/SMTP OAuth2 test for jianxin.
 ```
 
 因此确认：

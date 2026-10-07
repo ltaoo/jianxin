@@ -1,0 +1,60 @@
+# 简信 Web / design + jxui
+
+前端以 Cloudflare [Agentic Inbox](https://github.com/cloudflare/agentic-inbox) 的
+`demo_app.png`、Sidebar、Header、MailboxSplitView 和 email-list 为视觉参考。
+参考 revision：`48039bb6785af34e592c2966f87cde2b255c4c80`。
+采用浅灰侧栏、白色分栏、细边界、蓝色未读标记和约 380px 的阅读旁列表。
+
+## 分层
+
+- `.design`：唯一视觉契约，包含语义颜色、字体、间距、尺寸、组件和来源。
+- `packages/design`：导出规范中的 tokens / components；构建器将同一份 tokens
+  生成 CSS 变量。调整颜色或尺寸应先修改 `.design`。
+- `packages/jxui`：可复用 Timeless 组件及 ControlCore。包含 Button、Input、Select、
+  NavItem、Badge、Avatar、ConversationRow、Panel、Toolbar、EmptyState、MailMessage、AgentPanel 与 AgentCore。
+- `src/pages/inbox/index.model.js`：多邮箱分组、状态刷新、筛选、分页、请求取消、正文选项、已读同步。
+- `src/pages/inbox/index.js`：页面组装，只调用 Model / Core 方法。
+- `src/services.js`：同源的本机邮件 / Agent API，写操作校验请求标记和 Origin。
+- `src/gallery.js`：组件示例页；不读取或修改真实邮件。
+- `vendor`：从本地 timeless 0.34.0 复制的 Lite / DOM 发布产物，保留 MIT 许可和 SHA256。
+- `dist`：提交到仓库的构建产物，由 Rust `include_str!` 打入可执行文件，无运行时 CDN。
+
+## 构建与检查
+
+```sh
+node frontend/build.mjs
+node frontend/build.mjs --check
+node --test frontend/tests/*.test.mjs
+# 构建后，以下检查使用本机模型和空邮箱，不打开浏览器：
+python3 frontend/tests/agent-http.py target/macos-app/jianxin
+TMPDIR=/private/tmp cargo test -p jianxin-cli -p jianxin-store -p jianxin-core
+bash scripts/build-macos-app.sh --install
+```
+
+构建器优先使用前端目录安装的 esbuild 0.27.4，否则使用相邻 `../timeless`
+已有的 pnpm 工具依赖；通过 `TIMELESS_ROOT` 指定另一个 timeless 目录。
+独立环境可在 `frontend` 运行 `npm install`，无需修改 timeless 项目。
+macOS 打包脚本先构建前端，再构建 CLI。普通 Cargo 构建使用已提交的 `dist`。
+
+更新 timeless 时，应从对应版本的本地 `dist/timeless/<version>` 更新两份 runtime，
+同时更新 vendor manifest 和许可证，再重新执行全部非浏览器检查。
+
+## 手动验证
+
+```sh
+target/macos/Jianxin.app/Contents/Resources/jianxin web --port 0
+```
+
+打开命令输出的网址 `http://127.0.0.1:PORT/`。组件展示位于 `/components`，
+例如 `http://127.0.0.1:PORT/components`。
+
+检查邮箱和文件夹切换、主题/发件人/摘要搜索、50 条对话分页、选择对话、
+返回和浏览器前进后退。宽屏打开右侧阅读面板，窄屏使用单栏和返回按钮。
+每次最多加载 50 封邮件头，可继续加载后续邮件；只有展开的邮件加载正文。
+检查图片和纯文本开关、正文高度，以及已读同步失败后的重试。
+手动标为未读后，不会在当前页面自动改回已读。
+
+页面读本地数据，刷新不强制发起邮箱同步。已读写操作先同步远端，成功后
+更新本地状态。邮件助手支持按邮箱独立聊天、搜索与总结、工具执行记录、可编辑回复草稿和已读变更提议。
+草稿保存及状态变更必须明确确认；不提供自动发送、删除或归档。模型配置及隐私说明见 [Web Agent](../docs/web.md#邮件-agent)。
+不运行或自动操作浏览器；这些交互需要人工验证。

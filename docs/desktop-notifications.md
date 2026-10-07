@@ -1,0 +1,135 @@
+# Desktop notifications
+
+`jianxin daemon` polls mail and emits native **local** notifications. It does not
+use APNs, FCM, or a cloud push relay, and never uploads mail to a notification
+service. Failed notification submissions remain pending for retry. System
+acceptance is not proof a banner appeared: Focus / Do Not Disturb and desktop
+settings may suppress it.
+
+```sh
+jianxin notifications --register
+jianxin notifications --status
+jianxin notifications --test
+```
+
+These commands do not require mail configuration. Default is `--status`.
+
+## HTTP notification hook
+
+外部本机程序可以通过运行中的 Jianxin Web 服务发送系统通知。
+需要长期接收调用时，关闭服务的空闲退出：
+
+```sh
+jianxin web --port 8787 --idle-seconds 0
+```
+
+在配置文件中添加（合并到已有 `general`，保留邮箱等其他配置）：
+
+```json
+{
+  "general": {
+    "api": {
+      "token": "YOUR_RANDOM_TOKEN"
+    }
+  }
+}
+```
+
+`token` 使用不含空格的 ASCII 字符串，也支持已有 SecretRef 格式，
+例如 `{"env":"JIANXIN_API_TOKEN"}`。未配置或空 token 时接口拒绝所有调用。
+修改配置后重启 Web 服务生效。API token 不会出现在 Web 页面/API 响应或配置 Debug 日志中。
+
+推送接口固定为 `POST http://127.0.0.1:8787/api/notifications`，
+在 `Authorization` 请求头传入配置的 token：
+
+```sh
+curl --fail-with-body -X POST 'http://127.0.0.1:8787/api/notifications' \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $JIANXIN_API_TOKEN" \
+  --data '{"title":"任务完成","subtitle":"外部程序","body":"报表已生成","id":"report-job-1"}'
+```
+
+`JIANXIN_API_TOKEN` 是调用方环境变量，值应与服务端配置的 token 一致。
+
+| 字段 | 说明 |
+| --- | --- |
+| `title` | 必填，非空，最多 120 字 |
+| `body` | 可选，默认空，最多 4096 字，允许换行和制表符 |
+| `subtitle` | 可选，默认「简信」，最多 120 字 |
+| `id` | 可选，非空，最多 128 字；省略时生成唯一 ID |
+
+成功返回 HTTP **202**，JSON `{"accepted":true,"id":"report-job-1"}`。
+这表示原生系统通知服务接受了消息；横幅是否展示仍由系统权限、专注模式等决定。
+macOS 中同一 ID 会使用同一通知标识，可用唯一 ID 区分各次任务。
+错误码：400 参数无效，401 token 缺少/错误或未配置，403 来源校验失败，405 方法错误，413 请求超过 32 KiB，
+415 非 JSON，429 并发请求过多，503 原生投递失败。
+
+接口只监听 `127.0.0.1`，必须使用 `Authorization: Bearer <token>`。
+不接受 URL 查询参数中的 token，不需要 `X-Jianxin-Request`。
+浏览器跨来源请求不会被允许。推送路径不随 Web 阅读页的随机路径变化；
+旧的 `/<随机令牌>/api/notifications` 已停用。
+仅启动收信 daemon 不会提供此 HTTP 接口；Web 服务必须保持运行。
+macOS 需已安装 Jianxin.app 并已允许系统通知。
+点击通知直接打开 Web 邮件阅读器，跳过临时窗口；此接口不支持执行命令或自定义跳转地址。
+
+## macOS
+
+```sh
+bash scripts/build-macos-app.sh --install
+jianxin notifications --register
+```
+
+Requires Xcode command line tools and Rust 1.92+ for the GPUI desktop. The Swift notification helper targets macOS 11+; the desktop runtime also needs a macOS version supported by GPUI Kit. The build script
+produces a signed (ad-hoc, for local use) `~/Applications/Jianxin.app`, creates
+all icon sizes, and registers `com.jianxin.mail` with LaunchServices. Existing
+bundles are moved to the printed temporary build/backup directory, not deleted.
+Distribution to other machines needs Developer ID signing / notarization.
+The app uses a separate `macos-app` Cargo profile with size optimization and
+thin LTO, plus Swift size optimization. It bundles the ICNS icon only; the
+original PNG stays in the repository. Normal CLI release builds are unchanged.
+
+Choose **Allow** when macOS asks, or enable 简信 in System Settings →
+Notifications. A native AppKit/UserNotifications helper runs inside the signed
+bundle; this avoids anonymous AppleScript notifications and dependence on
+deprecated notification APIs. The CLI automatically finds the user-installed
+bundle, then `/Applications/Jianxin.app`. `JIANXIN_MACOS_APP` can select a build.
+
+Opening Jianxin.app manually starts the shared Rust tray and unread mail panel,
+without a Dock icon. The panel lists the latest unread subjects, times and mailboxes;
+its “打开邮件阅读器” button opens the local Web reader. Closing the panel keeps
+the tray running. The panel exit button and tray menu exit action stop background polling before
+closing the desktop app. Clicking a system notification opens the Web reader directly
+in the default browser. See [desktop tray](desktop-tray.md) for three-platform build
+and manual verification instructions.
+New-mail notifications carry the mailbox, local message ID and source config alongside
+subject, sender and thread identity; the full message body stays out of notifications.
+Clicking selects the matching mailbox and folder, highlights the conversation and
+expands that exact message in the Web reader. Older notifications without routing
+metadata may still open the inbox. No browser is opened by registration/status/test commands.
+
+## Windows
+
+Uses native WinRT Toast notifications (Windows 10/11). Registration
+creates `HKCU\Software\Classes\AppUserModelId\com.jianxin.mail` with the 简信
+display name and icon; it does not need administrator privileges. Sends also
+ensure this registration exists, instead of borrowing PowerShell's identity.
+Registration also creates the user-local `jianxin://` protocol handler. New-mail
+toasts use [Windows protocol activation](https://learn.microsoft.com/windows/apps/design/shell/tiles-and-notifications/toast-schema)
+and store their targets under the local application data `jianxin/notification-targets`
+directory, so clicking from Notification Center works after the sender exits.
+Allow notifications in Windows Settings. Windows runtime behavior must be
+verified on Windows; a macOS test does not validate it.
+
+## Linux
+
+Uses `notify-rust` / session D-Bus / freedesktop notifications. No `notify-send`
+installation is needed. `--register` installs a user-local `.desktop` entry
+and PNG icon; it does not add an autostart entry. Requires a graphical desktop,
+a notification service, and access to that user's session bus. A headless
+server or system service outside the GUI session cannot show desktop banners.
+Clicking the banner or “查看邮件” action opens the exact message. The notification
+service must support actions, and the watcher must still be running to handle them.
+Linux runtime behavior must be verified on a Linux desktop.
+
+The third-party backend: https://github.com/hoodie/notify-rust
+The icon source and generation prompt are in `assets/`.

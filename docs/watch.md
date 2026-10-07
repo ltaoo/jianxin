@@ -1,6 +1,6 @@
 # 新邮件 Watch 模式
 
-`eeeemail watch` 是常驻轮询进程。当前使用增量 IMAP/SMTP 同步实现轮询；后续可以在不改变事件表和输出格式的前提下替换为 IMAP IDLE 或厂商 push。
+`jianxin watch` 是常驻轮询进程。当前使用增量 IMAP/SMTP 同步实现轮询；后续可以在不改变事件表和输出格式的前提下替换为 IMAP IDLE 或厂商 push。
 
 ```text
 定时 poll
@@ -17,33 +17,53 @@ CLI 输出 / webhook / 桌面通知 / MCP notification
 监听全部账号，使用 `config.json` 里的默认间隔：
 
 ```sh
-eeeemail watch
+jianxin watch
 ```
 
 只监听一个账号：
 
 ```sh
-eeeemail watch --account outlook
+jianxin watch --account outlook
 ```
 
 自定义间隔，最小 5 秒：
 
 ```sh
-eeeemail watch --interval 60
+jianxin watch --interval 60
 ```
 
 机器可读的 CLI 输出：
 
 ```sh
-eeeemail watch --json
+jianxin watch --json
 ```
+
+## 后台运行
+
+`daemon` 会在后台启动 `watch --notify`，关闭终端后仍继续轮询，并强制启用系统通知：
+
+```sh
+jianxin daemon
+jianxin daemon --interval 60
+jianxin daemon --status
+jianxin daemon --stop
+```
+
+macOS 使用 LaunchAgent 托管进程，异常退出后会自动重启；其他平台使用 PID
+文件防止重复启动。日志写入应用数据目录下的 `jianxin-daemon.log`。
+
+新邮件事件只针对收件箱（标准化角色 `inbox`），不包括已发送、归档、草稿等
+文件夹，也排除已删除邮件。按“账号 + Message-ID”持久化去重；缺少 Message-ID
+时退回本地邮件 ID，不会按主题或 thread 合并不同邮件。不同账号收到同一封邮件
+仍会各自提醒；同一对话的新回复也会正常提醒。旧事件记录保留，但非收件箱及
+重复事件不再投递。通知失败时保留同一个事件用于重试。
 
 ## 输出通道
 
 ### Webhook
 
 ```sh
-eeeemail watch --webhook https://example.com/hooks/mail
+jianxin watch --webhook https://example.com/hooks/mail
 ```
 
 每个事件都会以 `POST`、`Content-Type: application/json` 发送。非 2xx 响应、网络失败或超时都会保留事件，下一轮重试。
@@ -51,20 +71,25 @@ eeeemail watch --webhook https://example.com/hooks/mail
 ### 桌面通知
 
 ```sh
-eeeemail watch --notify
+jianxin watch --notify
 ```
 
 支持：
 
 ```text
-macOS:  osascript
-Linux:  notify-send
+macOS:   Jianxin.app / UserNotifications（独立应用名称和图标）
+Windows: notify-rust / WinRT Toast
+Linux:   notify-rust / session D-Bus
 ```
+
+首次使用执行 `jianxin notifications --register`，用
+`jianxin notifications --test` 检查系统提醒。macOS 先安装应用包。
+安装与权限说明见 [desktop-notifications.md](desktop-notifications.md)。
 
 ### MCP notification
 
 ```sh
-eeeemail watch --mcp
+jianxin watch --mcp
 ```
 
 输出 newline-delimited JSON-RPC logging notification：
@@ -85,7 +110,7 @@ eeeemail watch --mcp
 `data` 是完整新邮件事件。默认只包含摘要；加 `--include-body` 才包含正文：
 
 ```sh
-eeeemail watch --mcp --include-body
+jianxin watch --mcp --include-body
 ```
 
 正文字段会同时带有：
@@ -117,7 +142,7 @@ eeeemail watch --mcp --include-body
 CLI 参数优先于配置文件：
 
 ```sh
-eeeemail watch --interval 30 --webhook https://example.com/hooks/mail
+jianxin watch --interval 30 --webhook https://example.com/hooks/mail
 ```
 
 ## 事件持久化

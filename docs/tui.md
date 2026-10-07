@@ -1,10 +1,10 @@
 # TUI 终端界面
 
-`eeeemail tui` 打开交互式终端 UI；不带子命令直接运行 `eeeemail` 也是同一个入口。
+`jianxin tui` 打开交互式终端 UI；不带子命令直接运行 `jianxin` 也是同一个入口。
 
 ```sh
-eeeemail tui        # 等价于 eeeemail
-eeeemail -a gmail   # -a 对 TUI 无效：文件夹面板会列出全部配置账号
+jianxin tui        # 等价于 jianxin
+jianxin -a gmail   # -a 对 TUI 无效：文件夹面板会列出全部配置账号
 ```
 
 TUI 不支持 `--json`。
@@ -45,6 +45,7 @@ TUI 不支持 `--json`。
 | `PageUp` / `PageDown` | 正文滚动 10 行 |
 | `Enter` | 文件夹面板：重新加载邮件并聚焦列表；列表：打开（会话模式下先钻入会话）；打开邮件会标为已读并把焦点移到正文 |
 | `Esc` | 会话内返回会话列表；否则清除搜索词和状态消息 |
+| `b` | 在浏览器打开选中邮件的 HTML 阅读页（先展开对话） |
 | `?` | 帮助浮层，按任意键关闭 |
 
 ### 邮件操作
@@ -83,7 +84,7 @@ TUI 不支持 `--json`。
 
 - 会话上按 `Enter` 钻入：邮件按时间正序排列（`#1` 最旧），光标停在最新一封；再按 `Enter` 打开某封邮件，`Esc` 逐级返回。
 - 会话内 `u` 切换已读、`d` 删除后，会话列表会立即刷新。
-- 会话归组规则与 CLI 的 `eeeemail threads` 一致：优先 `In-Reply-To`/`References` 祖先链，其次服务端线程 key（Gmail `X-GM-THRID`、IMAP `THREAD=REFERENCES`）、Outlook `Thread-Index` 根，最后是归一化主题。
+- 会话归组规则与 CLI 的 `jianxin threads` 一致：优先 `In-Reply-To`/`References` 祖先链，其次服务端线程 key（Gmail `X-GM-THRID`、IMAP `THREAD=REFERENCES`）、Outlook `Thread-Index` 根，最后是归一化主题。
 - 切回平铺列表（再按 `t`）会清空搜索词。
 
 ## 搜索
@@ -116,6 +117,11 @@ TUI 不支持 `--json`。
 - 自动携带 `In-Reply-To`/`References` 线程头，回复在各家客户端都会归入同一会话。
 
 ## 相关配置
+
+默认显示对话列表；按 `Enter` 在原会话下展开首封邮件和后续回复，按 `Esc` 收起。
+文件夹视图只显示该文件夹包含的对话，展开后保留跨文件夹的完整上下文。
+侧栏使用完整邮箱地址，并显示同步状态和凭据错误的处理提示。
+TUI 每秒检查本地数据库变化，守护进程收到新邮件后会自动更新列表，尽量保留当前选中邮件。
 
 TUI 的行为受 `config.json` 中这些字段影响：
 
