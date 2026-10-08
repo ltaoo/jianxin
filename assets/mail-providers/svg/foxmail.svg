@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" data-n="foxmail-favicon" aria-labelledby="foxmail-title"><title data-n="foxmail-title" id="foxmail-title">Foxmail</title>
+<defs data-n="paint-definitions"><linearGradient id="foxmail-red" x1="0" y1="0" x2="0" y2="1" data-n="foxmail-red"><stop stop-color="#cc3838" data-n="foxmail-red-color-stop-0" /><stop offset="1" stop-color="#bf2f2f" data-n="foxmail-red-color-stop-1" /></linearGradient></defs>
+<path id="lower-bevel" fill="#551515" opacity=".8" d="M2 15 13 4h10l3-3h3v5l-5 5H13l-5 5v4l3 3h10l1-1v-3h-6v-2l5-4h6l2 2v9l-7 6H4l-2-2Z" data-n="lower-bevel" />
+<path id="foxmail-g" fill="url(#foxmail-red)" d="M2 14 13 3h10l3-3h3v5l-5 5H13l-5 5v4l3 3h10l1-1v-3h-6v-1l5-5h6l2 2v9l-7 6H4l-2-2Z" data-n="foxmail-g" />
+</svg>

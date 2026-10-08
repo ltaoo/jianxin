@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" data-n="sina-favicon" aria-labelledby="sina-title"><title data-n="sina-title" id="sina-title">新浪邮箱</title>
+<defs data-n="paint-definitions">
+ <linearGradient id="sina-red" x1="0" y1="0" x2="0" y2="1" data-n="sina-red"><stop stop-color="#ff8881" data-n="sina-red-color-stop-0" /><stop offset=".45" stop-color="#ff362f" data-n="sina-red-color-stop-.45" /><stop offset="1" stop-color="#e71813" data-n="sina-red-color-stop-1" /></linearGradient>
+ <radialGradient id="sina-iris" data-n="sina-iris"><stop stop-color="#1c1818" data-n="sina-iris-color-stop-0" /><stop offset=".75" stop-color="#282626" data-n="sina-iris-color-stop-.75" /><stop offset="1" stop-color="#797777" data-n="sina-iris-color-stop-1" /></radialGradient>
+</defs>
+<path id="flaming-eye" fill="url(#sina-red)" d="M1.5 18c0-4 2-8 4-10l-1 5 6-6 2-4 1 8 4-7 2-2 1 9 3 3 2-6 1-1 1 8c2 2 3 4 3 7 0 7-7 10-15 10C7 29 1.5 25 1.5 18Z" data-n="flaming-eye" />
+<path id="white-eye" fill="#fff" d="M5 21c0-4 4-6.5 10.5-6.5S27 17 27 21c0 4-5 6-11 6S5 25 5 21Z" data-n="white-eye" />
+<ellipse id="dark-iris" fill="url(#sina-iris)" cx="14.7" cy="21" rx="7.1" ry="5.5" data-n="dark-iris" />
+<ellipse id="large-eye-highlight" fill="#fff" cx="12" cy="22.5" rx="2.7" ry="2.8" data-n="large-eye-highlight" />
+<circle id="small-eye-highlight" fill="#fff" cx="17.2" cy="18.8" r="1.2" data-n="small-eye-highlight" />
+</svg>

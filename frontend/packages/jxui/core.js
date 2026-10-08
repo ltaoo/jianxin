@@ -15,10 +15,27 @@ export function ControlCore(initial = {}, actions = {}) {
 
 /** Persistent presentation Core for one mailbox, including its collapsed state. */
 export function MailboxCore(account, actions) {
-  const core = ControlCore({ ...account, active: false, expanded: true }, actions);
+  const platforms = { gmail: 'gmail', google: 'gmail', outlook: 'outlook', microsoft: 'outlook',
+    qq: 'qq', foxmail: 'foxmail', '163': 'netease163', netease163: 'netease163', '126': 'netease126', netease126: 'netease126',
+    yeah: 'yeah', aliyun: 'aliyun', sina: 'sina', '139': 'mail139', mail139: 'mail139', icloud: 'icloud',
+    zoho: 'zoho', yahoo: 'yahoo', fastmail: 'fastmail', proton: 'proton', tencent: 'tencent', exmail: 'tencent' };
+  const platformIcon = next => {
+    const platform = String(next.platform || '').trim().toLowerCase() || String(next.provider || '').trim().toLowerCase();
+    return Object.hasOwn(platforms, platform) ? platforms[platform] : '';
+  };
+  const problem = next => ['warning', 'error'].includes(next.status?.tone) ? next.status.label || '邮箱状态异常' : '';
+  const core = ControlCore({ ...account, platformIcon: platformIcon(account), problem: problem(account),
+    active: false, expanded: true, statusOpen: false, oauth: { state: 'idle', busy: false } }, actions);
   return Object.assign(core, {
     toggle() { core.set({ expanded: !core.state.expanded }); },
-    updateAccount(next) { core.set(next); },
+    toggleStatus() { if (core.state.problem) core.set({ statusOpen: !core.state.statusOpen }); },
+    closeStatus() { if (core.state.statusOpen) core.set({ statusOpen: false }); },
+    startOAuth() { if (core.state.status?.state === 'oauth_required' && !core.state.oauth.busy) return actions?.login?.(core); },
+    updateAccount(next) {
+      const nextProblem = problem(next);
+      core.set({ ...next, platformIcon: platformIcon(next), problem: nextProblem,
+        statusOpen: !!nextProblem && nextProblem === core.state.problem && core.state.statusOpen });
+    },
   });
 }
 

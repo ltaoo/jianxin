@@ -31,24 +31,25 @@ export function Input({ store, label, placeholder = '', ...rest }) {
     }, onUnmounted() { off(); b.cleanup(); },
   });
 }
-export function Badge({}, children) { return View({ as: 'span', class: 'jx-badge' }, children); }
+export function Badge({}, children) { return View({ as: 'span', class: 'jx-badge', attributes: { n: 'count-badge' } }, children); }
 export function Avatar({ name }) {
   const tones = ['blue', 'green', 'violet', 'amber'];
   const hash = Array.from(name || '').reduce((value, letter) => value + letter.codePointAt(0), 0);
-  return View({ class: `jx-avatar jx-avatar--${tones[hash % tones.length]}`, attributes: { 'aria-hidden': 'true' } }, [Array.from(name || '?')[0].toUpperCase()]); }
+  return View({ class: `jx-avatar jx-avatar--${tones[hash % tones.length]}`, attributes: { n: 'sender-avatar', 'aria-hidden': 'true' } }, [Array.from(name || '?')[0].toUpperCase()]); }
 const iconNames = {
   agent: 'bot', mail: 'inbox', all: 'file-stack', inbox: 'inbox', sent: 'upload', drafts: 'pen-line',
   archive: 'box', trash: 'trash-2', spam: 'circle-alert', custom: 'folder',
-  unread: 'message-square-more', refresh: 'refresh-cw', back: 'arrow-left', close: 'x',
+  unread: 'message-square-more', starred: 'star', refresh: 'refresh-cw', back: 'arrow-left', close: 'x',
   search: 'search', menu: 'menu', next: 'chevron-right', prev: 'chevron-left',
   check: 'check', image: 'image', text: 'file-text', attachment: 'paperclip',
   notification: 'message-square-more', clock: 'clock-3', server: 'server', user: 'user', privacy: 'eye', loading: 'loader-circle',
+  more: 'ellipsis-vertical', reply: 'undo-2', expand: 'maximize',
 };
 let iconsRegistered = false;
 export function Glyph(name) {
   // Register the selected official ASN definitions in the actual Timeless Icon registry.
   if (!iconsRegistered) { Timeless.registerIcons(icons); iconsRegistered = true; }
-  return View({ as: 'span', class: `jx-glyph jx-glyph--${name}`, attributes: { 'aria-hidden': 'true' } },
+  return View({ as: 'span', class: `jx-glyph jx-glyph--${name}`, attributes: { n: `icon-${name}`, 'aria-hidden': 'true' } },
     [Timeless.Icon({ name: iconNames[name] || 'folder', size: 20 })]);
 }
 export function NavItem({ store, icon = 'custom', count = 0, showCount = false }) {
@@ -56,9 +57,9 @@ export function NavItem({ store, icon = 'custom', count = 0, showCount = false }
   const countLabel = b.derive(s => String(s.count ?? count));
   const countVisible = b.derive(s => showCount || (s.count ?? count) > 0);
   return View({ as: 'button', class: b.derive( s => `jx-nav-item ${s.active ? 'is-active' : ''}`),
-    attributes: { type: 'button', 'aria-current': b.derive( s => s.active ? 'page' : undefined) },
+    attributes: { n: `mail-navigation-${icon}-button`, type: 'button', 'aria-current': b.derive( s => s.active ? 'page' : undefined) },
     onClick(e) { store.click(e); }, onUnmounted: b.cleanup,
-  }, [Glyph(icon), View({ as: 'span', class: 'jx-truncate', attributes: { title: store.state.label } }, [b.derive( s => s.label)]), Show({ when: countVisible, ok: () => Badge({}, [countLabel]) })]);
+  }, [Glyph(icon), View({ as: 'span', class: 'jx-truncate', attributes: { n: 'mail-navigation-label', title: store.state.label } }, [b.derive( s => s.label)]), Show({ when: countVisible, ok: () => Badge({}, [countLabel]) })]);
 }
 export function Panel({ kind, id, ...props }, children) { return View({ ...props, attributes: { ...props.attributes, id }, class: `jx-panel jx-panel--${kind} ${props.class || ''}` }, children); }
 export function Toolbar(props = {}, children) { return View({ ...props, class: `jx-toolbar ${props.class || ''}` }, children); }
@@ -66,21 +67,51 @@ export function EmptyState({ title, description, icon = 'mail' }, children = [])
   return View({ class: 'jx-empty', attributes: { role: 'status' } }, [Glyph(icon),
     View({ as: 'h2' }, [title]), View({ as: 'p' }, [description]), ...children]);
 }
-export function ConversationRow({ store, thread }) {
+export function ConversationRow({ store, thread, mailbox, root = '', favorite = false }) {
   const b = binding(store);
-  return View({ as: 'a', class: b.derive( s => `jx-conversation ${s.active ? 'is-selected' : ''} ${thread.unread_count ? 'is-unread' : ''}`),
-    attributes: { href: store.state.href, 'aria-current': b.derive( s => s.active ? 'true' : undefined), title: thread.subject },
+  const account = mailbox ? binding(mailbox) : b;
+  const platformIcon = account.derive(s => s.platformIcon || '');
+  const link = View({ as: 'a', class: b.derive( s => `jx-conversation ${s.active ? 'is-selected' : ''} ${thread.unread_count ? 'is-unread' : ''}`),
+    attributes: { n: 'conversation-link', href: store.state.href, 'aria-current': b.derive( s => s.active ? 'true' : undefined), title: thread.subject },
     onClick(e) { if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); store.click(e); } },
-    onUnmounted: b.cleanup,
-  }, [Avatar({ name: thread.sender || thread.account_email }), View({ as: 'span', class: 'jx-unread-dot', attributes: { 'aria-label': thread.unread_count ? '未读' : '已读' } }),
-    View({ class: 'jx-conversation-content' }, [
-      View({ class: 'jx-row' }, [View({ as: 'span', class: 'jx-sender jx-truncate' }, [thread.sender || thread.account_email]),
+    onUnmounted() { if (!favorite) { if (mailbox) account.cleanup(); b.cleanup(); } },
+  }, [Avatar({ name: thread.sender || thread.account_email }), View({ as: 'span', class: 'jx-unread-dot', attributes: { n: 'conversation-unread-indicator', 'aria-label': thread.unread_count ? '未读' : '已读' } }),
+    View({ class: 'jx-conversation-content', attributes: { n: 'conversation-summary' } }, [
+      View({ class: 'jx-row', attributes: { n: 'conversation-sender-row' } }, [View({ as: 'span', class: 'jx-sender jx-truncate', attributes: { n: 'conversation-sender' } }, [thread.sender || thread.account_email]),
         thread.message_count > 1 && Badge({}, [String(thread.message_count)]),
         RelativeTime({ timestamp: thread.last_message_at })]),
-      View({ class: 'jx-subject jx-truncate' }, [thread.subject || '（无主题）']),
-      View({ class: 'jx-snippet jx-truncate' }, [thread.snippet || '（无邮件摘要）']),
-      View({ class: 'jx-conversation-account jx-truncate' }, [Glyph('mail'), thread.account_email]),
+      View({ class: 'jx-subject jx-truncate', attributes: { n: 'conversation-subject' } }, [thread.subject || '（无主题）']),
+      View({ class: 'jx-snippet jx-truncate', attributes: { n: 'conversation-snippet' } }, [thread.snippet || '（无邮件摘要）']),
+      View({ class: 'jx-conversation-account jx-truncate', attributes: { n: 'conversation-mailbox' } }, [
+        Show({ when: platformIcon, ok: () => View({ as: 'img', class: 'jx-conversation-favicon', attributes: {
+          n: 'conversation-mailbox-favicon', src: account.derive(s => `${root}/assets/mail-providers/${s.platformIcon}.svg`), alt: '', 'aria-hidden': 'true',
+        } }) }),
+        Show({ when: account.derive(s => !s.platformIcon), ok: () => Glyph('mail') }),
+        View({ as: 'span', class: 'jx-truncate', attributes: { n: 'conversation-mailbox-email', title: thread.account_email } }, [thread.account_email]),
+      ]),
     ])]);
+  if (!favorite) return link;
+  let detach = () => {};
+  return View({ class: 'jx-conversation-card', attributes: { n: 'favorite-conversation-card' },
+    onMounted({ target: host }) {
+      const target = host.get$elm?.() || host;
+      const outside = event => { if (!target.querySelector('[data-n="favorite-more-controls"]')?.contains(event.target)) store.closeMenu(); };
+      document.addEventListener('pointerdown', outside); detach = () => document.removeEventListener('pointerdown', outside);
+    }, onKeyDown(event) {
+      if (event.key === 'Escape' && store.state.menuOpen) { event.preventDefault(); event.stopPropagation(); store.closeMenu(); event.currentTarget.querySelector('[data-n="favorite-more-toggle"]')?.focus(); }
+    }, onUnmounted() { detach(); if (mailbox) account.cleanup(); b.cleanup(); } }, [
+    link,
+    View({ class: 'jx-favorite-more', attributes: { n: 'favorite-more-controls' } }, [
+      View({ as: 'button', class: 'jx-button jx-button--ghost jx-icon-button', attributes: { n: 'favorite-more-toggle', type: 'button', title: '更多', 'aria-label': `更多操作：${thread.subject || '无主题'}`,
+        'aria-expanded': b.derive(s => String(s.menuOpen)), 'aria-controls': `favorite-more-${thread.id}` }, onClick() { store.toggleMenu(); } }, [Glyph('more')]),
+      Show({ when: b.derive(s => s.menuOpen), ok: () => View({ as: 'nav', class: 'jx-mail-menu', attributes: { n: 'favorite-more-panel', id: `favorite-more-${thread.id}`, 'aria-label': '收藏操作' },
+        onMounted({ target: host }) { (host.get$elm?.() || host).querySelector('button')?.focus(); } }, [
+        View({ as: 'button', class: 'jx-mail-menu-action', attributes: { n: 'favorite-unstar', type: 'button', disabled: b.derive(s => s.pending ? '' : undefined) },
+          onClick(event) { event.currentTarget.closest('[data-n="favorite-more-controls"]').querySelector('[data-n="favorite-more-toggle"]').focus(); store.unstar(); } }, [Glyph('starred'), b.derive(s => s.pending ? '正在取消收藏…' : '取消收藏')]),
+      ]) }),
+    ]),
+    Show({ when: b.derive(s => !!s.error || s.pending), ok: () => View({ as: 'p', class: b.derive(s => `jx-favorite-status ${s.error ? 'jx-error' : 'jx-muted'}`), attributes: { n: 'favorite-unstar-status', role: 'status', 'aria-live': 'polite' } }, [b.derive(s => s.error || '正在取消收藏…')]) }),
+  ]);
 }
 export function formatDate(ts, now = Date.now()) {
   if (!Number.isFinite(ts) || ts <= 0 || !Number.isFinite(new Date(ts * 1000).getTime())) return '未知时间';
@@ -99,7 +130,7 @@ export function RelativeTime({ timestamp }) {
   const valid = Number.isFinite(timestamp) && timestamp > 0 && Number.isFinite(date.getTime());
   let timer;
   return View({ as: 'time', class: 'jx-date', attributes: {
-    title: valid ? date.toLocaleString('zh-CN') : '未知时间',
+    n: 'relative-time', title: valid ? date.toLocaleString('zh-CN') : '未知时间',
     datetime: valid ? date.toISOString() : undefined,
   }, onMounted() {
     label.as(formatDate(timestamp));
@@ -123,30 +154,74 @@ export function Select({ store, label, options, id }) {
 }
 
 /** A mailbox is always visible; collapsing only hides its own folder children. */
-export function MailboxGroup({ store }, folders) {
+export function MailboxGroup({ store, root = '' }, folders) {
   const b = binding(store);
   const expanded = b.derive(s => s.expanded);
   const email = b.derive(s => s.email);
-  const status = b.derive(s => s.status?.label || '未同步');
+  const problem = b.derive(s => s.problem);
+  const opened = b.derive(s => s.statusOpen);
+  const icon = b.derive(s => s.platformIcon);
   const items = b.derive(s => s.folders || []);
+  let detach = () => {};
   return View({ as: 'section', class: 'jx-mailbox-group',
-    attributes: { 'aria-label': email }, onUnmounted: b.cleanup,
-  }, [View({ class: 'jx-mailbox-header' }, [
+    attributes: { n: 'mailbox-group', 'aria-label': email },
+    onMounted({ target }) {
+      function outside(event) {
+        if (!target.querySelector('.jx-mailbox-icon')?.contains(event.target) && !target.querySelector('.jx-mailbox-status-popover')?.contains(event.target)) store.closeStatus();
+      }
+      function escape(event) {
+        if (event.key === 'Escape' && store.state.statusOpen) {
+          store.closeStatus(); target.querySelector('[n="mailbox-status-trigger"]')?.focus();
+        }
+      }
+      document.addEventListener('keydown', escape); document.addEventListener('pointerdown', outside);
+      detach = () => { document.removeEventListener('keydown', escape); document.removeEventListener('pointerdown', outside); };
+    }, onUnmounted() { detach(); b.cleanup(); },
+  }, [View({ class: 'jx-mailbox-header', attributes: { n: 'mailbox-header' } }, [
     View({ as: 'button', class: b.derive(s => `jx-mailbox-toggle ${s.expanded ? 'is-open' : ''}`),
-      attributes: { type: 'button', 'aria-label': b.derive(s => `${s.expanded ? '折叠' : '展开'} ${s.email} 的文件夹`),
+      attributes: { n: 'mailbox-folders-toggle', type: 'button', 'aria-label': b.derive(s => `${s.expanded ? '折叠' : '展开'} ${s.email} 的文件夹`),
         'aria-expanded': b.derive(s => String(s.expanded)), 'aria-controls': `folders-${store.state.id}` },
       onClick() { store.toggle(); },
     }, [Glyph('next')]),
-    View({ as: 'button', class: b.derive(s => `jx-mailbox-identity ${s.active ? 'is-active' : ''}`),
-      attributes: { type: 'button', title: email, 'aria-current': b.derive(s => s.active ? 'true' : undefined) },
-      onClick(e) { store.click(e); },
-    }, [View({ class: 'jx-mailbox-name' }, [Glyph('mail'), View({ as: 'strong', class: 'jx-truncate' }, [email])]),
-      View({ class: b.derive(s => `jx-mailbox-status jx-mailbox-status--${s.status?.tone || 'warning'}`),
-        attributes: { role: 'status', 'aria-live': 'polite' },
-      }, [View({ as: 'span', class: 'jx-status-dot', attributes: { 'aria-hidden': 'true' } }), status]),
+    View({ class: 'jx-mailbox-name', attributes: { n: 'mailbox-name' } }, [
+      View({ as: 'span', class: 'jx-mailbox-icon', attributes: { n: 'mailbox-platform-icon' } }, [
+        Show({ when: icon, ok: () => View({ as: 'img', class: 'jx-mailbox-favicon', attributes: {
+          n: 'mailbox-platform-favicon', src: b.derive(s => `${root}/assets/mail-providers/${s.platformIcon}.svg`), alt: '', 'aria-hidden': 'true',
+        } }) }),
+        Show({ when: b.derive(s => !s.platformIcon), ok: () => Glyph('mail') }),
+        Show({ when: problem, ok: () => View({ as: 'button', class: 'jx-mailbox-status-trigger', attributes: {
+          n: 'mailbox-status-trigger', type: 'button', 'aria-label': b.derive(s => `${s.email}：${s.problem}，查看详情`),
+          'aria-expanded': b.derive(s => String(s.statusOpen)), 'aria-controls': `mailbox-status-${store.state.id}`,
+        }, onClick() { store.toggleStatus(); } }, [View({ as: 'span',
+          class: b.derive(s => `jx-mailbox-status-badge jx-mailbox-status-badge--${s.status?.tone}`),
+          attributes: { n: 'mailbox-status-badge', 'aria-hidden': 'true' },
+        }, ['!'])]) }),
+      ]),
+      View({ as: 'button', class: b.derive(s => `jx-mailbox-identity ${s.active ? 'is-active' : ''}`),
+        attributes: { n: 'select-mailbox', type: 'button', title: email, 'aria-current': b.derive(s => s.active ? 'true' : undefined) },
+        onClick(e) { store.closeStatus(); store.click(e); },
+      }, [View({ as: 'strong', class: 'jx-truncate', attributes: { n: 'mailbox-email' } }, [email])]),
     ]),
+    Show({ when: opened, ok: () => View({ as: 'div', class: 'jx-mailbox-status-popover',
+      attributes: { n: 'mailbox-status-details', id: `mailbox-status-${store.state.id}`, role: 'status', 'aria-live': 'polite' },
+    }, [View({ as: 'p', attributes: { n: 'mailbox-problem-message' } }, [problem]),
+      Show({ when: b.derive(s => s.status?.state === 'oauth_required'), ok: () => View({ class: 'jx-mailbox-oauth', attributes: { n: 'mailbox-oauth-login' } }, [
+        View({ as: 'button', class: 'jx-button jx-button--primary', attributes: {
+          n: 'start-mailbox-oauth', type: 'button', disabled: b.derive(s => s.oauth.busy ? '' : undefined),
+        }, onClick() { store.startOAuth(); } }, [b.derive(s => s.oauth.busy ? '等待授权完成…' : '开始 OAuth 登录')]),
+        Show({ when: b.derive(s => !!s.oauth.verification_uri), ok: () => View({ class: 'jx-mailbox-oauth-prompt', attributes: { n: 'mailbox-oauth-prompt' } }, [
+          View({ as: 'p', attributes: { n: 'mailbox-oauth-code-instructions' } }, ['在授权页面输入：']),
+          View({ as: 'code', class: 'jx-mailbox-oauth-code', attributes: { n: 'mailbox-oauth-user-code' } }, [b.derive(s => s.oauth.user_code)]),
+          View({ as: 'a', class: 'jx-button jx-button--secondary', attributes: {
+            n: 'open-mailbox-oauth-page', href: b.derive(s => s.oauth.verification_uri), target: '_blank', rel: 'noopener noreferrer',
+          } }, ['打开授权页面']),
+        ]) }),
+        Show({ when: b.derive(s => !!s.oauth.error), ok: () => View({ as: 'p', class: 'jx-error', attributes: { n: 'mailbox-oauth-error' } }, [b.derive(s => s.oauth.error)]) }),
+        Show({ when: b.derive(s => s.oauth.state === 'complete' && !s.oauth.error), ok: () => View({ as: 'p', attributes: { n: 'mailbox-oauth-complete' } }, ['授权成功，正在更新邮箱状态。']) }),
+      ]) }),
+    ]) }),
   ]), Show({ when: expanded, ok: () => View({ class: 'jx-mailbox-folders',
-    attributes: { id: `folders-${store.state.id}` },
+    attributes: { n: 'mailbox-folders', id: `folders-${store.state.id}` },
   }, [For({ each: items, render(folder) { return folders(folder, store.state.id); } })]) })]);
 }
 

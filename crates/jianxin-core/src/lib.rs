@@ -92,9 +92,16 @@ impl App {
 
     /// Replace the in-memory config after an account-management tool edits it.
     pub fn reload_config(&mut self, config: AppConfig) -> Result<Vec<Account>> {
-        self.config = config;
+        let previous = std::mem::replace(&mut self.config, config);
+        let accounts = match self.import_accounts() {
+            Ok(accounts) => accounts,
+            Err(error) => {
+                self.config = previous;
+                return Err(error);
+            }
+        };
         self.providers.write().unwrap().clear();
-        self.import_accounts()
+        Ok(accounts)
     }
 
     /// Copy configured accounts into the local database.
@@ -102,29 +109,30 @@ impl App {
     /// Ids are deterministic (`provider + email`), so re-running this never
     /// duplicates rows and never loses a sync cursor.
     pub fn import_accounts(&self) -> Result<Vec<Account>> {
-        let conn = self.db.lock();
-        let mut out = Vec::with_capacity(self.config.accounts.len());
-        for cfg in &self.config.accounts {
-            cfg.validate()?;
-            let account = cfg.to_account();
-            jianxin_store::account_repo::upsert(&conn, &account)?;
-            out.push(account);
-        }
-        // Drop rows for accounts that were removed from the config.
-        let keep: Vec<String> = self
-            .config
-            .accounts
-            .iter()
-            .map(|c| c.to_account().id)
-            .collect();
-        for stale in jianxin_store::account_repo::list(&conn)?
-            .into_iter()
-            .filter(|a| !keep.contains(&a.id))
-        {
-            tracing::info!(account = %stale.email, "removing account no longer in config");
-            jianxin_store::account_repo::delete(&conn, &stale.id)?;
-        }
-        Ok(out)
+        self.db.transaction(|conn| {
+            let mut out = Vec::with_capacity(self.config.accounts.len());
+            for cfg in &self.config.accounts {
+                cfg.validate()?;
+                let account = cfg.to_account();
+                jianxin_store::account_repo::upsert(conn, &account)?;
+                out.push(account);
+            }
+            // Drop rows for accounts that were removed from the config.
+            let keep: Vec<String> = self
+                .config
+                .accounts
+                .iter()
+                .map(|c| c.to_account().id)
+                .collect();
+            for stale in jianxin_store::account_repo::list(conn)?
+                .into_iter()
+                .filter(|a| !keep.contains(&a.id))
+            {
+                tracing::info!(account = %stale.email, "removing account no longer in config");
+                jianxin_store::account_repo::delete(conn, &stale.id)?;
+            }
+            Ok(out)
+        })
     }
 
     pub fn accounts(&self) -> Result<Vec<Account>> {
@@ -276,6 +284,28 @@ mod tests {
         app.import_accounts().unwrap();
         app.import_accounts().unwrap();
         assert_eq!(app.accounts().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn reload_rolls_back_config_and_account_rows_on_validation_or_storage_failure() {
+        let mut app = App::with_database(config_with("a@example.com"), Database::open_in_memory().unwrap()).unwrap();
+        let original = app.accounts().unwrap()[0].id.clone();
+        let provider = app.provider(&app.account_configs()[0]).unwrap();
+        let mut config = config_with("b@example.com");
+        config.accounts.push(config_with("invalid").accounts.remove(0));
+        assert!(app.reload_config(config).is_err());
+        assert_eq!(app.accounts().unwrap().len(), 1);
+        assert_eq!(app.resolve_account(None).unwrap().email, "a@example.com");
+        app.db().lock().execute_batch("CREATE TEMP TRIGGER fail_account_delete BEFORE DELETE ON accounts BEGIN SELECT RAISE(ABORT, 'fixture'); END;").unwrap();
+        assert!(app.reload_config(config_with("b@example.com")).is_err());
+        assert_eq!(app.accounts().unwrap()[0].id, original);
+        assert_eq!(app.accounts().unwrap().len(), 1);
+        assert!(Arc::ptr_eq(&provider, &app.provider(&app.account_configs()[0]).unwrap()));
+        app.db().lock().execute_batch("DROP TRIGGER fail_account_delete;").unwrap();
+        app.reload_config(config_with("b@example.com")).unwrap();
+        assert_eq!(app.accounts().unwrap().len(), 1);
+        assert_eq!(app.resolve_account(None).unwrap().email, "b@example.com");
+        assert!(!Arc::ptr_eq(&provider, &app.provider(&app.account_configs()[0]).unwrap()));
     }
 
     #[test]

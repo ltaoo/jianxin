@@ -699,6 +699,7 @@ fn new_account(args: &AddAccountArgs) -> Result<AccountConfig> {
         id: args.id.clone(),
         email: args.email.trim().to_string(),
         display_name: args.display_name.clone(),
+        platform: None,
         provider: args.provider,
         auth,
         imap: None,

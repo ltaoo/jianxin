@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" data-n="gmail-favicon" aria-labelledby="gmail-title"><title data-n="gmail-title" id="gmail-title">Gmail</title>
+<path id="blue-left-stem" fill="#4285f4" d="M10 81v117c0 9 7 16 16 16h38V121Z" data-n="blue-left-stem" />
+<path id="green-right-stem" fill="#34a853" d="M192 121v93h38c9 0 16-7 16-16V81Z" data-n="green-right-stem" />
+<path id="red-envelope-fold" fill="#ea4335" d="M64 54l64 48 64-48v67l-64 48-64-48Z" data-n="red-envelope-fold" />
+<path id="dark-red-left-fold" fill="#c5221f" d="M10 81V64c0-22 25-35 43-22l11 12v67Z" data-n="dark-red-left-fold" />
+<path id="yellow-right-fold" fill="#fbbc04" d="M192 54l11-12c18-13 43 0 43 22v17l-54 40Z" data-n="yellow-right-fold" />
+</svg>

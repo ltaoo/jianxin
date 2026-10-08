@@ -1,9 +1,9 @@
 {
   "schema": "design.v1",
   "name": "jianxin-jxui",
-  "version": "1.6.3",
+  "version": "1.7.2",
   "status": "evolve",
-  "updated_at": "2026-10-03",
+  "updated_at": "2026-10-08",
   "agent": {
     "skill": "design",
     "instructions": "Read this contract before UI changes. Build pages with jxui components and Timeless store-driven models. Bind tokens; update the catalog when adding components; verify CSS against tokens. Never automate a browser."
@@ -11,7 +11,7 @@
   "overview": "Agentic Inbox inspired local email reader: recessed sidebar, dense conversation rows, white split reading surface, restrained blue actions. Keep actual Jianxin accounts and local mail semantics.",
   "intent": {
     "reference": "https://github.com/cloudflare/agentic-inbox (demo_app.png, Sidebar.tsx, Header.tsx, MailboxSplitView.tsx, email-list.tsx)",
-    "direction": "Quiet, compact mail workspace with a persistent mailbox sidebar and a 380px conversation list when reading.",
+    "direction": "Quiet mail workspace with a Gmail-inspired white reading surface, sender-first headers, compact action menus and an optional wide reader.",
     "signature": "Timeless official outline icons, blue selected navigation, tinted sender avatars and a compact activity notification center.",
     "treatment": "utilitarian"
   },
@@ -96,7 +96,8 @@
       "violetText": "#715396",
       "amberTint": "#fff2df",
       "amberText": "#866023",
-      "primaryForeground": "#ffffff"
+      "primaryForeground": "#ffffff",
+      "overlay": "rgba(23,35,55,0.28)"
     },
     "font": {
       "body": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
@@ -142,7 +143,16 @@
       "agent-width": "24rem",
       "agent-editor-height": "6rem",
       "agent-z": "40",
-      "trayHeight": "35rem"
+      "trayHeight": "35rem",
+      "composeWidth": "44rem",
+      "composeHeight": "42rem",
+      "composeMinWidth": "22rem",
+      "composeMinHeight": "24rem",
+      "composeLabel": "3.5rem",
+      "composeRecipient": "10rem",
+      "composeContacts": "14rem",
+      "composeBody": "8rem",
+      "mailMenu": "14rem"
     },
     "elevation": {
       "flat": "none",
@@ -163,7 +173,8 @@
     "z": {
       "sidebar": "10",
       "skip": "20",
-      "notification": "30"
+      "notification": "30",
+      "compose": "50"
     }
   },
   "components": {
@@ -209,6 +220,7 @@
     "ConversationRow": {
       "height": "{tokens.layout.row}",
       "backgroundColor": "{tokens.color.canvas}",
+      "behavior": "Show the owning mailbox's platform favicon before its address, using the same MailboxCore as the sidebar. Config refresh updates visible row icons; unknown platforms retain the generic mailbox glyph. In Favorites, show a sibling More button and dismissible menu with Unstar. Cancel all starred mails in the conversation via the existing per-message flag queue, including later pages. Preserve the card and show retryable errors on failure; refresh list and counts after completion. Row Core lives in the page Model and survives list refresh while pending.",
       "variants": [
         "read",
         "unread",
@@ -240,8 +252,9 @@
         "error"
       ],
       "when": "Metadata and sandboxed body with a per-message Core",
-      "behavior": "All loaded messages in a conversation expand by default. Successfully loaded bodies in a visible reader automatically sync read status; writes are queued. Manual unread remains until next reading session, and failed writes remain retryable. Read/unread writes are silent: no loading or success message and list refresh preserves visible content. Failures remain visible and retryable.",
-      "bodyHeight": "Body iframe grows to measured content height without a maximum height; ResizeObserver updates the height after layout or image changes."
+      "behavior": "All loaded messages in the selected folder expand by default; an unfiltered conversation includes the complete history. Successfully loaded bodies in a visible reader automatically sync read status; writes are queued. Read/unread state, conversation counts and sidebar unread counts update immediately, then roll back with a retryable error if synchronization fails. Pending writes preserve optimistic counts across background refreshes; the list and mailbox counts reconcile after the queue settles. Manual unread remains until next reading session. No loading or success message.",
+      "bodyHeight": "Body iframe grows to measured content height without a maximum height; ResizeObserver updates the height after layout or image changes.",
+      "details": "Sender header shows full email beside the name; sender and recipient buttons reveal From, To, Cc and Reply-To. Header actions expose star and reply; a dismissible More menu exposes read state, sender details and a native metadata modal. Escape, close and backdrop restore focus. Bottom reply action repeats the same page-owned composer."
     },
     "Select": {
       "height": "{tokens.layout.target}",
@@ -249,7 +262,7 @@
       "when": "Account selection"
     },
     "MailboxGroup": {
-      "when": "Always-visible account name and last sync outcome above account-scoped folders",
+      "when": "Always-visible mailbox name and locally bundled platform favicon above account-scoped folders; healthy sync labels are hidden",
       "variants": [
         "expanded",
         "collapsed",
@@ -258,7 +271,8 @@
       "backgroundColor": "{tokens.color.recessed}",
       "textColor": "{tokens.color.text}",
       "typography": "{tokens.type.control}",
-      "height": "{tokens.layout.target}"
+      "height": "{tokens.layout.target}",
+      "behavior": "Choose favicon from explicit account platform, otherwise provider. Warning/error states show a clickable badge on the icon; clicking opens safe status details, outside click or Escape closes them, and recovery removes the badge. OAuth-required details include a login button, device code and HTTPS verification link. Start only on explicit click, prevent duplicate starts, poll until done and refresh account configuration after credentials are stored. Unknown platforms use the generic mailbox icon. Preserve folder expansion and selection during refresh."
     },
     "Glyph": {
       "when": "Semantic UI icons via Timeless.Icon and the selected @timeless/inner-icons ASN registry",
@@ -287,12 +301,19 @@
       "theme": "Follow system appearance at creation and while open; desktop dark colors use themes.desktop.dark.color, including text, errors, button hover, borders and scrollbars.",
       "footer": "Reader and refresh actions on the left; the bottom-right exit button stops background mail polling before quitting the desktop app. Failure keeps the app open with a retryable error. The tray menu exit action uses the same complete shutdown.",
       "rowContextMenu": "Mail rows have no hover tooltip and no left-click navigation. Right-click menu 在浏览器中打开 opens that exact message in the existing Web reader; follows current desktop theme."
+    },
+    "ReplyWindow": {
+      "when": "Manual reply in a page-owned floating window with editable To/Cc, local correspondent search and attachments",
+      "width": "{tokens.layout.composeWidth}",
+      "height": "{tokens.layout.composeHeight}",
+      "backgroundColor": "{tokens.color.canvas}",
+      "behavior": "Drag title bar or use arrow keys; native desktop resize; mobile viewport fit. Preserve draft during mail navigation, confirm discard, validate recipient and attachment limits, and use the durable outbox for send. Automatically inherit Re: subject in the title; hide the subject editor until explicit edit. Minimize and maximize preserve the draft."
     }
   },
   "patterns": {
     "inbox": {
       "treatment": "utilitarian",
-      "layout": "18rem sidebar + flexible list; selected conversation opens a flexible reader and narrows list to 23.75rem. On mobile, show list or reader, with an explicit back button. The sidebar lists every mailbox and its own folders at once, with shared TUI/Web last-sync status; no mailbox dropdown."
+      "layout": "18rem sidebar + flexible list; selected conversation opens a flexible reader and narrows list to 23.75rem. On mobile, show list or reader, with an explicit back button. The sidebar lists every mailbox and its own folders at once, with shared TUI/Web last-sync status; no mailbox dropdown. Reader toolbar offers previous/next conversation within the loaded page and a wide-reading toggle. White subject area and folder label precede the sender-aligned body. Folder lists and reading pages scope sender, snippet, order, counts and visible messages to the selected folder; outgoing replies remain in Sent and full conversations remain available in All mail."
     },
     "agent": {
       "layout": "Persistent 24rem right panel; below compact breakpoint use dismissible overlay. Opening loads history only; sending invokes configured model.",
@@ -334,6 +355,10 @@
     {
       "path": "crates/jianxin-desktop/src/theme.rs",
       "purpose": "Native GPUI theme consumes the same design tokens at build time"
+    },
+    {
+      "path": "https://support.microsoft.com/en-us/outlook/create-and-respond-to-messages-in-outlook-web-app",
+      "purpose": "Separate compose window, recipient search, To/Cc and file attachments"
     }
   ],
   "exports": {
@@ -342,7 +367,6 @@
   "locked": [],
   "omitted": [
     "Web dark theme",
-    "sound",
-    "mail sending and full composer"
+    "sound"
   ]
 }

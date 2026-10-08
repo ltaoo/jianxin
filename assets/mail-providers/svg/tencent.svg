@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" data-n="tencent-favicon" aria-labelledby="tencent-title"><title data-n="tencent-title" id="tencent-title">腾讯企业邮箱</title>
+<g id="blue-mail-monogram" fill="#2984ef" data-n="blue-mail-monogram">
+ <path id="left-fold" d="M3 5h4c1.5 0 2.5.5 3.5 1.5l3.1 3.6L13 13 7.5 8H3v16h4l5.8-5.2.8 1.4-4.2 5.2C8.7 26.4 7.7 27 6 27H3c-2 0-3-1.4-3-3V8c0-1.8 1-3 3-3Z" data-n="left-fold" />
+ <path id="right-fold" d="M28 5h-4c-1.5 0-2.5.5-3.5 1.5L17 12l1 1.4L24 8h4v16h-3L15 15l-1 1.2L22 25c1 1.2 2 2 4 2h2c2 0 3-1.4 3-3V8c0-1.8-1-3-3-3Z" data-n="right-fold" />
+</g>
+</svg>

@@ -20,6 +20,7 @@ jianxin-store = { workspace = true }
 jianxin-tui = { workspace = true }
 
 anyhow.workspace = true
+base64.workspace = true
 chrono.workspace = true
 dotenvy.workspace = true
 dirs.workspace = true

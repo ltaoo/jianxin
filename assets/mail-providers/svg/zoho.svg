@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" data-n="zoho-favicon" aria-labelledby="zoho-title"><title data-n="zoho-title" id="zoho-title">Zoho</title>
+<g id="rotated-zoho-ring" transform="rotate(-9 24 24)" fill="none" stroke-linecap="round" data-n="rotated-zoho-ring">
+ <rect id="white-ring-border" x="3" y="3" width="42" height="42" rx="14" stroke="#fff" stroke-width="4" data-n="white-ring-border" />
+ <rect id="white-ring-base" x="8" y="8" width="32" height="32" rx="10" fill="#fff" stroke="#fff" stroke-width="13" data-n="white-ring-base" />
+ <path id="green-top-right" stroke="#089949" stroke-width="8" d="M23 8h7c6 0 10 4 10 10v7" data-n="green-top-right" />
+ <path id="red-top-left" stroke="#e42527" stroke-width="8" d="M23 8h-5C12 8 8 12 8 18v7" data-n="red-top-left" />
+ <path id="yellow-bottom-left" stroke="#f9b21d" stroke-width="8" d="M8 24v6c0 6 4 10 10 10h7" data-n="yellow-bottom-left" />
+ <path id="blue-bottom-right" stroke="#226db4" stroke-width="8" d="M24 40h6c6 0 10-4 10-10v-6" data-n="blue-bottom-right" />
+</g>
+</svg>

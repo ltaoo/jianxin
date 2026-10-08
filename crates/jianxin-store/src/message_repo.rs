@@ -295,7 +295,7 @@ pub fn list_account(conn: &Connection, account_id: &str) -> Result<Vec<Message>>
 /// significant folder — inbox first — because that is the row a flag action
 /// should target. `immutable_id` is the stable key when the provider gives
 /// one; `message_id_header` is the next best; the row id never collapses.
-const DEDUP_RANK: &str = "ROW_NUMBER() OVER (
+pub(crate) const DEDUP_RANK: &str = "ROW_NUMBER() OVER (
     PARTITION BY m.account_id,
                  COALESCE(NULLIF(m.immutable_id, ''), m.message_id_header, m.id)
     ORDER BY CASE COALESCE(f.kind, '')
@@ -494,7 +494,11 @@ pub fn set_read(conn: &Connection, id: &str, read: bool) -> Result<()> {
 
 pub fn set_starred(conn: &Connection, id: &str, starred: bool) -> Result<()> {
     conn.execute(
-        "UPDATE messages SET is_starred = ?2, updated_at = ?3 WHERE id = ?1",
+        "UPDATE messages SET is_starred = ?2, updated_at = ?3
+         WHERE (account_id, COALESCE(NULLIF(immutable_id, ''), message_id_header, id)) IN (
+           SELECT account_id, COALESCE(NULLIF(immutable_id, ''), message_id_header, id)
+           FROM messages WHERE id = ?1
+         )",
         rusqlite::params![id, starred as i32, jianxin_domain::now_ts()],
     )
     .map_err(db_err)?;

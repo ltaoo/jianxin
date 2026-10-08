@@ -71,6 +71,36 @@ pub fn run(options: Options<'_>) -> Result<Report> {
     }
 }
 
+/// Restart an existing poller without enabling a service the user has stopped.
+pub fn restart_if_running(config_path: &Path, data_dir: &Path) -> Result<bool> {
+    if cfg!(target_os = "macos") {
+        let Some(detail) = launch_agent_detail()? else { return Ok(false); };
+        let current_config = parse_launch_config(&detail).and_then(|path| fs::canonicalize(path).ok());
+        if current_config.as_deref() != Some(fs::canonicalize(config_path)?.as_path()) {
+            return Ok(false);
+        }
+        if jianxin_config::AppConfig::load(config_path)?.data_dir() != data_dir {
+            bail!("data directory changed; restart the Web service before restarting the mail daemon");
+        }
+        let previous_pid = parse_launch_pid(&detail);
+        kickstart_launch_agent()?;
+        thread::sleep(Duration::from_millis(500));
+        let pid = launch_agent_detail()?.and_then(|detail| parse_launch_pid(&detail));
+        if pid.is_none() || pid == previous_pid {
+            bail!("mail daemon did not restart");
+        }
+        return Ok(true);
+    }
+    // ponytail: other platforms restart with config defaults; persist CLI overrides if needed.
+    let options = Options { config_path, data_dir, selector: None, interval: None, stop: false, status: false };
+    if run(Options { status: true, ..options })?.pid.is_none() {
+        return Ok(false);
+    }
+    run(Options { stop: true, ..options })?;
+    run(options)?;
+    Ok(true)
+}
+
 fn watch_arguments(
     config_path: &Path,
     selector: Option<&str>,
@@ -215,6 +245,17 @@ fn stop_launch_agent(
 }
 
 fn launch_agent_status(control_file: &Path, log_file: &Path) -> Result<Option<Report>> {
+    let Some(detail) = launch_agent_detail()? else { return Ok(None); };
+    let pid = parse_launch_pid(&detail);
+    Ok(Some(Report {
+        status: if pid.is_some() { "running" } else { "not_running" }.to_string(),
+        pid,
+        control_file: control_file.to_path_buf(),
+        log_file: log_file.to_path_buf(),
+    }))
+}
+
+fn launch_agent_detail() -> Result<Option<String>> {
     let domain = launch_domain()?;
     let service = format!("{domain}/{LAUNCH_AGENT_LABEL}");
     let output = Command::new("launchctl")
@@ -224,19 +265,7 @@ fn launch_agent_status(control_file: &Path, log_file: &Path) -> Result<Option<Re
     if !output.status.success() {
         return Ok(None);
     }
-    let detail = String::from_utf8_lossy(&output.stdout);
-    let pid = parse_launch_pid(&detail);
-    Ok(Some(Report {
-        status: if pid.is_some() {
-            "running"
-        } else {
-            "not_running"
-        }
-        .to_string(),
-        pid,
-        control_file: control_file.to_path_buf(),
-        log_file: log_file.to_path_buf(),
-    }))
+    Ok(Some(String::from_utf8_lossy(&output.stdout).into_owned()))
 }
 
 fn kickstart_launch_agent() -> Result<()> {
@@ -320,6 +349,16 @@ fn parse_launch_pid(detail: &str) -> Option<u32> {
         let (key, value) = line.trim().split_once(" = ")?;
         (key == "pid").then(|| value.parse().ok()).flatten()
     })
+}
+
+fn parse_launch_config(detail: &str) -> Option<PathBuf> {
+    let mut arguments = detail.lines()
+        .skip_while(|line| line.trim() != "arguments = {")
+        .skip(1)
+        .map(str::trim)
+        .take_while(|line| *line != "}");
+    arguments.find(|argument| *argument == "--config")?;
+    arguments.next().filter(|path| !path.is_empty()).map(PathBuf::from)
 }
 
 fn xml_escape(value: &str) -> String {
@@ -538,6 +577,10 @@ mod tests {
     fn launch_pid_is_parsed() {
         let detail = "state = running\n\tpid = 12345\n";
         assert_eq!(parse_launch_pid(detail), Some(12345));
+        let detail = "arguments = {\n/bin/jianxin\n--config\n/tmp/mail {work}/config.json\nwatch\n}\npid = 12345\n";
+        assert_eq!(parse_launch_config(detail), Some(PathBuf::from("/tmp/mail {work}/config.json")));
+        assert_eq!(parse_launch_config("arguments = {\n--config\n}\n"), None);
+        assert_eq!(parse_launch_config("environment = {\n--config\n/tmp/untrusted\n}\n"), None);
     }
 
     #[test]

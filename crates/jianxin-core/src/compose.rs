@@ -70,10 +70,12 @@ impl<'a> ComposeService<'a> {
 
         let account = cfg.to_account();
         let folder = self.sent_folder(cfg)?;
-        let message = message_from_compose(&account.id, &folder, compose, false);
+        let mut message = message_from_compose(&account.id, &folder, compose, false);
 
         self.app.db().transaction(|conn| {
             store::message_repo::upsert_many(conn, std::slice::from_ref(&message))?;
+            store::thread_repo::assign(conn, &account.id, std::slice::from_mut(&mut message))?;
+            store::thread_repo::recompute_for(conn, std::slice::from_ref(&message))?;
             store::outbox_repo::enqueue(conn, &account.id, &message.id, compose)
         })
     }
@@ -434,6 +436,15 @@ mod tests {
         let job = app.compose().queue(&cfg, &compose()).unwrap();
         let loaded = store::outbox_repo::load_payload(&app.db().lock(), &job.id).unwrap();
         assert_eq!(loaded.attachments[0].data, b"hi".to_vec());
+        let local = app.mail().get(&job.message_id).unwrap();
+        assert!(local.thread_id.is_some());
+        let mut reply = compose();
+        reply.subject = "Re: Hello".into();
+        let reply_job = app.compose().queue(&cfg, &reply).unwrap();
+        assert_eq!(
+            app.mail().get(&reply_job.message_id).unwrap().thread_id,
+            local.thread_id
+        );
     }
 
     #[test]

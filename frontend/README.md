@@ -25,6 +25,10 @@
 node frontend/build.mjs
 node frontend/build.mjs --check
 node --test frontend/tests/*.test.mjs
+cargo build -p jianxin-cli --bin jianxin
+python3 frontend/tests/reply-http.py target/debug/jianxin
+# 本机模拟 OAuth 服务验证授权、凭据保存和配置刷新，无真实登录：
+python3 frontend/tests/http-smoke.py target/debug/jianxin
 # 构建后，以下检查使用本机模型和空邮箱，不打开浏览器：
 python3 frontend/tests/agent-http.py target/macos-app/jianxin
 TMPDIR=/private/tmp cargo test -p jianxin-cli -p jianxin-store -p jianxin-core
@@ -52,9 +56,16 @@ target/macos/Jianxin.app/Contents/Resources/jianxin web --port 0
 返回和浏览器前进后退。宽屏打开右侧阅读面板，窄屏使用单栏和返回按钮。
 每次最多加载 50 封邮件头，可继续加载后续邮件；只有展开的邮件加载正文。
 检查图片和纯文本开关、正文高度，以及已读同步失败后的重试。
+检查白色主题区和文件夹标签、发件人邮箱、顶部及底部回复入口；「更多」菜单提供已读状态、发件人详情和「邮件元数据」，支持外部点击或 Escape 收起。
+检查元数据弹窗的 ID、对话 ID 和 Message-ID，以及发件人详情中的完整收件人和抄送地址；关闭或按 Escape 后焦点返回按钮。
+检查阅读工具栏的展开阅读、恢复分栏、上一封/下一封，以及列表边界和消息直达链接时的禁用状态。
+检查收藏卡片右侧「更多 → 取消收藏」：不打开邮件，取消对话内所有收藏，成功后移除卡片；失败保留剩余收藏并提示重试，支持 Escape 和外部点击关闭菜单。
+检查每封邮件的「回复」：悬浮窗口拖动和调整大小，To/Cc 搜索、选择和编辑，附件选择及拖入、移除；
+切换邮件、最小化和放大时保留回复，窗口标题显示自动生成的 Re: 主题，点击修改主题展开编辑；底部「发送」才提交邮件。
+关闭前确认丢弃，发送中禁止重复点击，失败时保留内容和附件。
 手动标为未读后，不会在当前页面自动改回已读。
 
-页面读本地数据，刷新不强制发起邮箱同步。已读写操作先同步远端，成功后
-更新本地状态。邮件助手支持按邮箱独立聊天、搜索与总结、工具执行记录、可编辑回复草稿和已读变更提议。
+页面读本地数据，刷新不强制发起邮箱同步。已读写操作立即更新页面状态及未读数量，
+后台同步远端；失败时恢复状态和数量并提示重试。邮件助手支持按邮箱独立聊天、搜索与总结、工具执行记录、可编辑回复草稿和已读变更提议。
 草稿保存及状态变更必须明确确认；不提供自动发送、删除或归档。模型配置及隐私说明见 [Web Agent](../docs/web.md#邮件-agent)。
 不运行或自动操作浏览器；这些交互需要人工验证。

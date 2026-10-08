@@ -3,11 +3,16 @@
 import http.server, threading, tempfile, pathlib, subprocess, json, re, time, sys, urllib.request, urllib.error, os
 
 requests = []
+model_started = threading.Event()
+resume_model = threading.Event()
 class Model(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args): pass
     def do_POST(self):
         payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         requests.append(payload)
+        if len(requests) == 1:
+            model_started.set()
+            assert resume_model.wait(5)
         assert payload['stream'] is True
         self.send_response(200); self.send_header('Content-Type', 'text/event-stream'); self.end_headers()
         if payload['messages'][-1]['role'] == 'user':
@@ -46,6 +51,14 @@ with tempfile.TemporaryDirectory(prefix='jianxin-agent-http-', dir='/private/tmp
         assert requests == []  # Opening history never calls the model.
         assert call('/chat', {'prompt': '列出邮箱'}, marker=False)[0] == 403
         assert call('/chat', {'prompt': '列出邮箱'})[0] == 202
+        assert model_started.wait(5)
+        reload_request = urllib.request.Request(root + 'api/mailboxes/reload', data=b'{}', headers={'X-Jianxin-Request': '1'})
+        try:
+            urllib.request.urlopen(reload_request, timeout=5)
+            raise AssertionError('reload accepted while the agent was busy')
+        except urllib.error.HTTPError as error:
+            assert error.code == 409
+        resume_model.set()
         for _ in range(100):
             state = call('')[1]
             if not state['busy']: break
@@ -64,4 +77,5 @@ with tempfile.TemporaryDirectory(prefix='jianxin-agent-http-', dir='/private/tmp
         assert json.loads(history.read_text())['messages'] == []
         print('Agent HTTP passed: protected POST, explicit model invocation, streaming tool loop, private persisted history, restart and clear. No browser or real mail used.')
     finally:
+        resume_model.set()
         process.terminate(); process.wait(timeout=5); log.close(); model.shutdown(); model.server_close()

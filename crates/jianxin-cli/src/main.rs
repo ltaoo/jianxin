@@ -354,7 +354,7 @@ fn run(cli: Cli) -> Result<()> {
         Command::Agent => jianxin_agent::run(app, &config_path),
         Command::Login => cmd_login(&app, &config_path, selector, &out),
         Command::Web { port, message, open, idle_seconds } =>
-            web::run(app, selector, port, message.as_deref(), open, idle_seconds),
+            web::run(app, &config_path, selector, port, message.as_deref(), open, idle_seconds),
         Command::Open { id, no_open } => web::open_message(&app, &config_path, selector, &id, no_open),
         Command::Sync { full, folder } => cmd_sync(&app, selector, full, folder.as_deref(), &out),
         Command::Watch {
@@ -635,6 +635,7 @@ fn cmd_login(app: &App, config_path: &Path, selector: Option<&str>, out: &Printe
     let login = jianxin_provider::auth::login_device_code(&cfg, |prompt| {
         eprintln!("Open: {}", prompt.verification_uri);
         eprintln!("Code: {}", prompt.user_code);
+        Ok(())
     })?;
     AppConfig::store_refresh_token(config_path, &cfg.email, &login.refresh_token)?;
     out.kv("stored", &config_path.display().to_string());

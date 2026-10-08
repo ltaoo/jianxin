@@ -9,8 +9,9 @@ export function GalleryPageView({ root }) {
   const notice = ref('组件示例，不会操作真实邮件');
   const clickable = label => control({ label }, { click() { notice.as(`已点击：${label}`); } });
   const thread = { id: 'example', sender: '组件示例', subject: '一条对话，多个清晰的状态', snippet: '用于检查列表密度、对齐和选中状态。', account_email: 'example@example.com', message_count: 2, unread_count: 1, last_message_at: 0 };
-  const mailbox = MailboxCore({ id: 'example', email: 'example@example.com', status: { label: '已同步', tone: 'success' }, folders: [{ id: 'example-inbox', name: 'Inbox' }] });
-  cores.push(mailbox);
+  const mailbox = MailboxCore({ id: 'example', email: 'example@example.com', platform: 'gmail', status: { label: '已同步', tone: 'success' }, folders: [{ id: 'example-inbox', name: 'Inbox' }] });
+  const failedMailbox = MailboxCore({ id: 'failed-example', email: 'example@qq.com', platform: 'qq', status: { label: '缺少凭据：配置客户端授权码', tone: 'error' }, folders: [] });
+  cores.push(mailbox, failedMailbox);
   const notifications = NotificationCore();
   notifications.record('example', '示例：邮箱状态更新失败', '组件示例消息，不代表真实邮箱发生错误。');
   cores.push(notifications);
@@ -29,10 +30,10 @@ export function GalleryPageView({ root }) {
       View({ attributes: { role: 'status', 'aria-live': 'polite' }, class: 'jx-muted' }, [notice])]),
     section('导航、徽章与头像', [NavItem({ store: control({ label: '收件箱', active: true }), icon: 'inbox', count: 12 }),
       NavItem({ store: control({ label: '已发送' }), icon: 'sent' }), View({ class: 'jx-row' }, [Avatar({ name: '简信' }), Badge({}, ['2 封邮件']), Badge({}, ['未读'])])]),
-    section('邮箱分组', [MailboxGroup({ store: mailbox }, folder => NavItem({ store: clickable(folder.name), icon: 'inbox' }))]),
+    section('邮箱分组', [MailboxGroup({ store: mailbox, root }, folder => NavItem({ store: clickable(folder.name), icon: 'inbox' })), MailboxGroup({ store: failedMailbox, root }, () => null)]),
     section('Timeless 图标', [View({ class: 'jx-row' }, ['inbox', 'sent', 'drafts', 'archive', 'trash', 'spam', 'refresh', 'search', 'notification', 'attachment'].map(name => Glyph(name)))]),
     section('通知中心', [NotificationCenter({ store: notifications })]),
-    section('对话行', [ConversationRow({ store: control({ href: '#examples', active: true }), thread })]),
+    section('对话行', [ConversationRow({ store: control({ href: '#examples', active: true }), thread, mailbox, root })]),
     section('工具栏与空状态', [Toolbar({}, [View({ as: 'strong' }, ['全部邮件']), Button({ store: clickable('刷新列表'), variant: 'ghost', icon: 'refresh' })]),
       EmptyState({ title: '这里还没有邮件', description: '后台同步完成后，点击刷新查看本地邮件。' })]),
   ]);

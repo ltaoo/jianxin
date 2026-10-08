@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" data-n="mail139-favicon" aria-labelledby="mail139-title"><title data-n="mail139-title" id="mail139-title">139 邮箱</title>
+<defs data-n="paint-definitions">
+ <linearGradient id="139-blue" x1="0" y1="0" x2="0" y2="1" data-n="139-blue"><stop stop-color="#3e8ac3" data-n="139-blue-color-stop-0" /><stop offset="1" stop-color="#0c6db4" data-n="139-blue-color-stop-1" /></linearGradient>
+ <linearGradient id="139-reflection" x1="0" y1="0" x2="0" y2="1" data-n="139-reflection"><stop stop-color="#0c6db4" stop-opacity=".62" data-n="139-reflection-color-stop-0" /><stop offset="1" stop-color="#0c6db4" stop-opacity=".15" data-n="139-reflection-color-stop-1" /></linearGradient>
+ <path id="139-digit-shapes" d="M0 4h3v6h1v2H0v-2h1V6H0ZM5 4h5v8H5v-2h3V9H5V7h3V6H5ZM11 4h5v8h-5v-2h3V9h-3Zm2 2v1h1V6Z" data-n="139-digit-shapes" />
+</defs>
+<use id="blue-139-digits" href="#139-digit-shapes" fill="url(#139-blue)" data-n="blue-139-digits" />
+<use id="mirrored-139-digits" href="#139-digit-shapes" transform="translate(0 19) scale(1 -.5)" fill="url(#139-reflection)" data-n="mirrored-139-digits" />
+</svg>

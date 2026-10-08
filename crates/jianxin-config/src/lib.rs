@@ -176,6 +176,9 @@ pub struct AccountConfig {
     pub email: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    /// Mailbox branding for the Web sidebar; independent of the transport provider.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
     /// Force a provider: `generic-imap` | `google` | `microsoft`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider: Option<ProviderId>,
@@ -625,11 +628,13 @@ pub fn example_config() -> AppConfig {
             {
                 "id": "gmail",
                 "email": "you@gmail.com",
+                "platform": "gmail",
                 "auth": { "type": "app_password", "password": { "keychain": "jianxin/gmail" } }
             },
             {
                 "id": "qq",
                 "email": "you@qq.com",
+                "platform": "qq",
                 "auth": { "type": "app_password", "password": { "env": "QQ_MAIL_PASSWORD" } }
             },
             {
@@ -673,6 +678,23 @@ mod tests {
         let cfg = example_config();
         assert_eq!(cfg.accounts.len(), 3);
         assert_eq!(cfg.accounts[0].provider_key(), ProviderId::GenericImap);
+        assert_eq!(cfg.accounts[0].platform.as_deref(), Some("gmail"));
+        assert_eq!(cfg.accounts[1].platform.as_deref(), Some("qq"));
+    }
+
+    #[test]
+    fn platform_is_optional_and_does_not_change_transport_or_account_identity() {
+        let mut account = example_config().accounts.remove(0);
+        let id = account.to_account().id;
+        account.platform = Some("qq".into());
+        assert_eq!(account.provider_key(), ProviderId::GenericImap);
+        assert_eq!(account.to_account().id, id);
+        let restored: AccountConfig = serde_json::from_str(&serde_json::to_string(&account).unwrap()).unwrap();
+        assert_eq!(restored.platform.as_deref(), Some("qq"));
+        let old: AccountConfig = serde_json::from_value(serde_json::json!({
+            "email": "old@example.com", "auth": { "type": "password", "password": "fixture" }
+        })).unwrap();
+        assert!(old.platform.is_none());
     }
 
     #[test]

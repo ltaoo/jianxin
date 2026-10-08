@@ -1,5 +1,13 @@
 // Selected @timeless/inner-icons 0.34.0 ASN definitions. MIT; see TIMELESS-LICENSE.
 export default {
+  "maximize": {"tag": "svg", "attrs": {"viewBox": "0 0 24 24", "fill": "none", "stroke": "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "class": "lucide lucide-maximize"}, "children": [{"tag": "path", "attrs": {"d": "M8 3H5a2 2 0 0 0-2 2v3"}}, {"tag": "path", "attrs": {"d": "M21 8V5a2 2 0 0 0-2-2h-3"}}, {"tag": "path", "attrs": {"d": "M3 16v3a2 2 0 0 0 2 2h3"}}, {"tag": "path", "attrs": {"d": "M16 21h3a2 2 0 0 0 2-2v-3"}}]},
+  "undo-2": {"tag": "svg", "attrs": {"viewBox": "0 0 24 24", "fill": "none", "stroke": "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "class": "lucide lucide-undo2-icon lucide-undo-2"}, "children": [{"tag": "path", "attrs": {"d": "M9 14 4 9l5-5"}}, {"tag": "path", "attrs": {"d": "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"}}]},
+  "ellipsis-vertical": {"tag": "svg", "attrs": {"viewBox": "0 0 24 24", "fill": "none", "stroke": "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "class": "lucide lucide-ellipsis-vertical-icon lucide-ellipsis-vertical"}, "children": [{"tag": "circle", "attrs": {"cx": "12", "cy": "12", "r": "1"}}, {"tag": "circle", "attrs": {"cx": "12", "cy": "5", "r": "1"}}, {"tag": "circle", "attrs": {"cx": "12", "cy": "19", "r": "1"}}]},
+  "star": {
+    "tag": "svg",
+    "attrs": { "viewBox": "0 0 24 24", "fill": "none", "stroke": "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" },
+    "children": [{ "tag": "path", "attrs": { "d": "m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" } }]
+  },
   "inbox": {
     "tag": "svg",
     "attrs": {

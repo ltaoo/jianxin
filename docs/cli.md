@@ -42,6 +42,7 @@ jianxin <子命令> --help   # 查看某个子命令的完整参数
     {
       "id": "gmail",
       "email": "you@gmail.com",
+      "platform": "gmail",
       "auth": { "type": "app_password", "password": { "env": "GMAIL_PWD" } }
     }
   ]
@@ -57,6 +58,7 @@ IMAP/SMTP 端点解析顺序：显式 `imap`/`smtp` 字段 → 域名预设（`g
   "id": "funzmnoreply",
   "email": "noreply@funzm.com",
   "provider": "generic-imap",
+  "platform": "aliyun",
   "auth": { "type": "app_password", "password": { "env": "FUNZM_NOREPLY_PWD" } },
   "imap": { "host": "imap.qiye.aliyun.com", "port": 993, "tls": "tls" },
   "smtp": { "host": "smtp.qiye.aliyun.com", "port": 465, "tls": "tls" }

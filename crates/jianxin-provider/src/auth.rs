@@ -142,7 +142,7 @@ pub struct OAuthLogin {
 
 pub fn login_device_code(
     account: &AccountConfig,
-    prompt: impl FnOnce(&DeviceCodePrompt),
+    prompt: impl FnOnce(&DeviceCodePrompt) -> Result<()>,
 ) -> Result<OAuthLogin> {
     let AuthConfig::OAuth2 {
         client_id,
@@ -192,7 +192,7 @@ pub fn login_device_code(
     prompt(&DeviceCodePrompt {
         user_code: started.user_code,
         verification_uri: started.verification_uri,
-    });
+    })?;
 
     let mut interval = Duration::from_secs(started.interval.max(1));
     let deadline = Instant::now()

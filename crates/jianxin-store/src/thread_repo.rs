@@ -254,12 +254,14 @@ fn row_to_thread(row: &rusqlite::Row<'_>) -> rusqlite::Result<Thread> {
 
 /// All message ids belonging to a thread, oldest first.
 pub fn message_ids(conn: &Connection, thread_id: &str) -> Result<Vec<MessageId>> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id FROM messages WHERE thread_id = ?1
-              ORDER BY COALESCE(sent_at, received_at, 0), id",
-        )
-        .map_err(db_err)?;
+    let sql = format!(
+        "SELECT id FROM (
+           SELECT m.*, {} AS dedup_rank FROM messages m LEFT JOIN folders f ON f.id=m.folder_id
+           WHERE m.thread_id=?1 AND m.is_deleted=0
+         ) WHERE dedup_rank=1 ORDER BY COALESCE(sent_at, received_at, 0), id",
+        crate::message_repo::DEDUP_RANK
+    );
+    let mut stmt = conn.prepare(&sql).map_err(db_err)?;
     let rows = stmt
         .query_map([thread_id], |r| r.get::<_, String>(0))
         .map_err(db_err)?
@@ -270,15 +272,18 @@ pub fn message_ids(conn: &Connection, thread_id: &str) -> Result<Vec<MessageId>>
 
 /// Recompute the denormalised counters after messages change.
 pub fn recompute(conn: &Connection, thread_id: &str) -> Result<()> {
+    let sql = format!(
+        "SELECT COUNT(*),
+           COALESCE(SUM(CASE WHEN is_read=0 THEN 1 ELSE 0 END),0),
+           COALESCE(MAX(COALESCE(sent_at,received_at,0)),0)
+         FROM (
+           SELECT m.*, {} AS dedup_rank FROM messages m LEFT JOIN folders f ON f.id=m.folder_id
+           WHERE m.thread_id=?1 AND m.is_deleted=0
+         ) WHERE dedup_rank=1",
+        crate::message_repo::DEDUP_RANK
+    );
     let (count, unread, last): (u32, u32, i64) = conn
-        .query_row(
-            "SELECT COUNT(*),
-                    COALESCE(SUM(CASE WHEN is_read = 0 THEN 1 ELSE 0 END), 0),
-                    COALESCE(MAX(COALESCE(sent_at, received_at, 0)), 0)
-               FROM messages WHERE thread_id = ?1",
-            [thread_id],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        )
+        .query_row(&sql, [thread_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
         .map_err(db_err)?;
 
     conn.execute(
@@ -446,6 +451,7 @@ mod tests {
                 allowed_accounts: &allowed,
                 folder_id: "",
                 unread: false,
+                starred: false,
                 query: "",
                 limit: 1,
                 offset: 0,

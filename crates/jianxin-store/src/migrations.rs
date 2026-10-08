@@ -19,7 +19,7 @@ use jianxin_domain::{MailError, MailErrorCode, Result};
 use rusqlite::Connection;
 
 /// Current `PRAGMA user_version`. Bump whenever a `SCHEMA_V*` block is added.
-pub const LATEST_VERSION: u32 = 5;
+pub const LATEST_VERSION: u32 = 6;
 
 /// Everything needed to create a database from scratch.
 const SCHEMA_V1: &str = r#"
@@ -249,6 +249,19 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
     }
     if current < 5 {
         tx.execute_batch(SCHEMA_V5).map_err(db_err)?;
+    }
+    if current < 6 {
+        // Existing folder copies also inflated the cached conversation counters.
+        let ids = tx
+            .prepare("SELECT id FROM threads")
+            .map_err(db_err)?
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(db_err)?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(db_err)?;
+        for id in ids {
+            crate::thread_repo::recompute(&tx, &id)?;
+        }
     }
     tx.pragma_update(None, "user_version", LATEST_VERSION)
         .map_err(db_err)?;
