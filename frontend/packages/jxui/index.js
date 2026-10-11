@@ -162,6 +162,19 @@ export function MailboxGroup({ store, root = '' }, folders) {
   const opened = b.derive(s => s.statusOpen);
   const icon = b.derive(s => s.platformIcon);
   const items = b.derive(s => s.folders || []);
+  function oauthField(field, label) {
+    return View({ as: 'label', class: 'jx-import-field' }, [View({ as: 'span' }, [label]),
+      View({ as: 'input', class: 'jx-input', attributes: { n: `mailbox-oauth-${field}`, type: field === 'token_endpoint' ? 'url' : 'text',
+        disabled: b.derive(s => s.oauth.busy ? '' : undefined), autocomplete: 'off', maxlength: field === 'client_id' ? '256' : '4096' },
+        onMounted({ target: host }) {
+          const target = host.get$elm?.() || host;
+          const apply = () => { if (target.value !== store.state.oauthDraft[field]) target.value = store.state.oauthDraft[field]; };
+          const input = event => store.editOAuth(field, event.target.value);
+          apply(); const stop = store.onStateChange(apply); target.addEventListener('input', input);
+          return () => { stop(); target.removeEventListener('input', input); };
+        } }),
+    ]);
+  }
   let detach = () => {};
   return View({ as: 'section', class: 'jx-mailbox-group',
     attributes: { n: 'mailbox-group', 'aria-label': email },
@@ -206,8 +219,15 @@ export function MailboxGroup({ store, root = '' }, folders) {
       attributes: { n: 'mailbox-status-details', id: `mailbox-status-${store.state.id}`, role: 'status', 'aria-live': 'polite' },
     }, [View({ as: 'p', attributes: { n: 'mailbox-problem-message' } }, [problem]),
       Show({ when: b.derive(s => s.status?.state === 'oauth_required'), ok: () => View({ class: 'jx-mailbox-oauth', attributes: { n: 'mailbox-oauth-login' } }, [
+        Show({ when: b.derive(s => !!s.oauth_config?.needs_setup), ok: () => View({ attributes: { n: 'mailbox-oauth-setup' } }, [
+          View({ as: 'p', class: 'jx-muted' }, ['邮箱已添加。请填写授权应用信息，再手动开始登录。']),
+          oauthField('client_id', 'OAuth 应用 ID（Client ID）'), oauthField('token_endpoint', 'HTTPS 令牌端点'),
+          View({ as: 'button', class: 'jx-button jx-button--secondary', attributes: { n: 'save-mailbox-oauth-settings', type: 'button',
+            disabled: b.derive(s => s.oauth.busy || !s.oauthDraft.client_id.trim() || !s.oauthDraft.token_endpoint.trim() ? '' : undefined) },
+            onClick() { store.saveOAuthSettings(); } }, [b.derive(s => s.oauth.state === 'saving' ? '正在保存…' : '保存授权设置')]),
+        ]) }),
         View({ as: 'button', class: 'jx-button jx-button--primary', attributes: {
-          n: 'start-mailbox-oauth', type: 'button', disabled: b.derive(s => s.oauth.busy ? '' : undefined),
+          n: 'start-mailbox-oauth', type: 'button', disabled: b.derive(s => s.oauth.busy || s.oauth_config?.needs_setup ? '' : undefined),
         }, onClick() { store.startOAuth(); } }, [b.derive(s => s.oauth.busy ? '等待授权完成…' : '开始 OAuth 登录')]),
         Show({ when: b.derive(s => !!s.oauth.verification_uri), ok: () => View({ class: 'jx-mailbox-oauth-prompt', attributes: { n: 'mailbox-oauth-prompt' } }, [
           View({ as: 'p', attributes: { n: 'mailbox-oauth-code-instructions' } }, ['在授权页面输入：']),

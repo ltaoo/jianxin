@@ -9,6 +9,7 @@ pub enum AccountSyncStatus {
     Local,
     NotSynced,
     LoginFailed,
+    #[serde(rename = "oauth_required")]
     OAuthRequired,
     MissingCredentials,
     SyncFailed,
@@ -50,6 +51,9 @@ pub fn read_account_sync_status(
     account_id: &str,
     has_local_folders: bool,
 ) -> AccountSyncStatus {
+    if config.accounts.iter().any(|account| account.to_account().id == account_id && account.needs_authorization()) {
+        return AccountSyncStatus::OAuthRequired;
+    }
     let path = config
         .data_dir()
         .join("account-status")
@@ -70,6 +74,21 @@ pub fn read_account_sync_status(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn oauth_without_credentials_is_pending_immediately_before_any_sync() {
+        assert_eq!(serde_json::to_value(AccountSyncStatus::OAuthRequired).unwrap(), "oauth_required");
+        let directory = std::env::temp_dir().join(format!("jianxin-pending-status-{}", jianxin_domain::new_id()));
+        let mut config: AppConfig = serde_json::from_str(r#"{"accounts":[{"email":"pending@outlook.com","auth":{"type":"oauth2"}}]}"#).unwrap();
+        config.general.data_dir = Some(directory.clone());
+        let id = config.accounts[0].to_account().id;
+        assert_eq!(read_account_sync_status(&config, &id, false), AccountSyncStatus::OAuthRequired);
+        crate::record_account_sync_status(&config, &id, None);
+        assert_eq!(read_account_sync_status(&config, &id, true), AccountSyncStatus::OAuthRequired);
+        let jianxin_config::AuthConfig::OAuth2 { access_token, .. } = &mut config.accounts[0].auth else { panic!("expected oauth2"); };
+        *access_token = Some(jianxin_config::SecretRef::Plain("valid-token".into()));
+        assert_eq!(read_account_sync_status(&config, &id, true), AccountSyncStatus::Synced);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
     #[test]
     fn shares_watcher_outcomes_with_both_interfaces_without_exposing_raw_errors() {
         let directory =

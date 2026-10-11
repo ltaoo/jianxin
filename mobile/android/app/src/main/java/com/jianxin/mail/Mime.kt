@@ -71,15 +71,13 @@ object Mime {
         }
         return null
     }
-    fun summary(raw: ByteArray, account: String, folder: String, validity: String, uid: String): Message {
+    fun summary(raw: ByteArray, account: String, folder: String, validity: String, uid: String, internalDate: String = ""): Message {
         val h = split(raw).first
         val m = Message(account, folder, validity, uid, subject = decodeHeader(h["subject"] ?: ""), from = Address.list(h["from"] ?: ""),
             to = Address.list(h["to"] ?: ""), cc = Address.list(h["cc"] ?: ""), replyTo = Address.list(h["reply-to"] ?: ""),
-            messageId = h["message-id"] ?: "", references = (h["references"] ?: "").split(Regex("\\s+")).filter { it.isNotBlank() })
-        val date = (h["date"] ?: "").replace(Regex("\\s*\\([^)]*\\)"), "")
-        for (format in listOf("EEE, d MMM yyyy HH:mm:ss Z", "d MMM yyyy HH:mm:ss Z", "EEE, d MMM yyyy HH:mm Z", "d MMM yyyy HH:mm Z")) {
-            try { SimpleDateFormat(format, Locale.US).parse(date)?.let { m.date = it.time; return m } } catch (_: Exception) { }
-        }
+            messageId = h["message-id"] ?: "", references = (h["references"] ?: "").split(Regex("\\s+")).filter { it.isNotBlank() },inReplyTo = h["in-reply-to"] ?: "",
+            threadIndexRoot = MailThreads.threadIndexRoot(h["thread-index"] ?: ""))
+        m.date = MailDate.resolve(h["date"] ?: "",internalDate)
         return m
     }
     fun parse(raw: ByteArray, depth: Int = 0): Content {
@@ -138,7 +136,7 @@ object Mime {
     }
     fun wrap(data: ByteArray): String = Base64.getEncoder().encodeToString(data).chunked(76).joinToString("\r\n")
     fun compose(draft: Draft, account: MailAccount): ByteArray {
-        draft.validate(); account.validate()
+        draft.validate(); account.validate(requireCredential = true)
         fun addresses(list: List<Address>) = list.joinToString(", ") { (if (it.name.isEmpty()) "" else encodedHeader(it.name) + " ") + "<${it.email}>" }
         val domain = account.email.substringAfter('@', "jianxin.local")
         val headers = mutableListOf("From: ${if (account.displayName.isEmpty()) "" else encodedHeader(account.displayName) + " "}<${account.email}>",

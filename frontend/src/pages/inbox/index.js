@@ -5,6 +5,7 @@ import { Button, Input, MailboxGroup, NavItem, Panel, Toolbar, EmptyState, Conve
 import { ControlCore } from '../../../packages/jxui/core.js';
 import { MailMessage } from '../../../packages/jxui/mail-message.js';
 import { ReplyWindow } from '../../../packages/jxui/reply-window.js';
+import { ConfigImport } from '../../../packages/jxui/config-import.js';
 import { InboxPageModel } from './index.model.js';
 
 export function InboxPageView(props) {
@@ -53,6 +54,7 @@ export function InboxPageView(props) {
         } }),
       ]),
       View({ class: 'jx-sidebar-footer', attributes: { n: 'mailbox-sidebar-footer' } }, [
+        Button({ store: ui.importMailboxes, variant: 'primary', icon: 'mail', attributes: { n: 'import-mailbox-config' } }),
         Button({ store: ui.reloadMailboxes, variant: 'ghost', attributes: { n: 'refresh-mailbox-config' } }),
         Show({ when: s.configStatus, ok: () => View({ as: 'p', class: 'jx-muted', attributes: { n: 'mailbox-config-feedback', role: 'status' } }, [s.configStatus]) }),
         View({ class: 'jx-row' }, [Glyph('server'), '本地邮件阅读器']),
@@ -118,7 +120,7 @@ export function InboxPageView(props) {
     ]);
   }
   return View({ class: combine({ selected, sidebar: s.sidebar, readerWide: s.readerWide }, d => `jx-app ${d.selected ? 'has-reader' : ''} ${d.sidebar ? 'has-sidebar' : ''} ${d.readerWide ? 'is-reader-wide' : ''}`),
-    onMounted() { window.addEventListener('popstate', methods.restore); document.addEventListener('visibilitychange', refreshStatuses); statusTimer = setInterval(refreshStatuses, 5000); methods.init(); },
+    onMounted() { window.addEventListener('popstate', methods.restore); document.addEventListener('visibilitychange', refreshStatuses); statusTimer = setInterval(refreshStatuses, 5000); methods.init(); if (props.location.hash === '#config-import') ui.configImport.open(); },
     onUnmounted() { agent.destroy(); agentToggle.destroy(); offAgentScope(); clearInterval(statusTimer); document.removeEventListener('visibilitychange', refreshStatuses); window.removeEventListener('popstate', methods.restore); derived.forEach(value => value.destroy()); methods.destroy(); vm.destroy(); },
   }, [Sidebar(), View({ class: 'jx-workspace' }, [
     Toolbar({ as: 'header', class: 'jx-header' }, [Button({ store: ui.menu, variant: 'ghost', icon: 'menu', class: 'jx-menu-button' }, []),
@@ -131,5 +133,5 @@ export function InboxPageView(props) {
       View({ class: 'jx-header-caption jx-row jx-muted' }, [Glyph('clock'), '专注于每一封邮件']), NotificationCenter({ store: ui.notifications }), Button({ store: agentToggle, icon: 'agent', variant: 'ghost' }),
     ]),
     View({ class: 'jx-main-row' }, [View({ class: 'jx-split' }, [List(), Show({ when: selected, ok: Reader })]), AgentPanel({ store: agent })]),
-  ]), ReplyWindow({ store: ui.reply })]);
+  ]), ReplyWindow({ store: ui.reply }), ConfigImport({ store: ui.configImport })]);
 }

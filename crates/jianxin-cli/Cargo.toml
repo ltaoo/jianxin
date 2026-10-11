@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 description = "jianxin command line interface"
 default-run = "jianxin"
+build = "../../platform/windows/build.rs"
 
 [[bin]]
 name = "jianxin"
@@ -35,8 +36,12 @@ ammonia = "4.2"
 tiny_http = "0.12"
 subtle = "2.6"
 
+[build-dependencies]
+embed-resource.workspace = true
+
 [target.'cfg(target_os = "linux")'.dependencies]
 notify-rust = "4.18"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61", features = ["Data_Xml_Dom", "UI_Notifications"] }
+windows-sys = { version = "0.61", features = ["Win32_System_Console", "Win32_UI_WindowsAndMessaging"] }

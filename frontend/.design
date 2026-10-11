@@ -275,7 +275,7 @@
       "textColor": "{tokens.color.text}",
       "typography": "{tokens.type.control}",
       "height": "{tokens.layout.target}",
-      "behavior": "Choose favicon from explicit account platform, otherwise provider. Warning/error states show a clickable badge on the icon; clicking opens safe status details, outside click or Escape closes them, and recovery removes the badge. OAuth-required details include a login button, device code and HTTPS verification link. Start only on explicit click, prevent duplicate starts, poll until done and refresh account configuration after credentials are stored. Unknown platforms use the generic mailbox icon. Preserve folder expansion and selection during refresh."
+      "behavior": "Choose favicon from explicit account platform, otherwise provider. Warning/error states show a clickable badge on the icon; clicking opens safe status details, outside click or Escape closes them, and recovery removes the badge. OAuth-required details include missing application ID/endpoint setup, a login button, device code and HTTPS verification link. Retain OAuth mailboxes before credentials exist and mark them pending immediately. Saving application settings never starts login; start only on explicit click, prevent duplicate starts, poll until done and refresh account configuration after credentials are stored. Unknown platforms use the generic mailbox icon. Preserve folder expansion, edited setup fields and selection during refresh."
     },
     "Glyph": {
       "when": "Semantic UI icons via Timeless.Icon and the selected @timeless/inner-icons ASN registry",
@@ -314,6 +314,12 @@
       "typography": "{tokens.type.control}",
       "controls": "Labelled read-only current config path, masked encryption key input, one primary generate button, read-only ciphertext textarea and secondary copy button; reuse native GPUI Kit Input, Textarea and Button controls with layout.target height, radius.control and desktop system appearance.",
       "behavior": "A normal window remains open on blur; reopening activates the same form, closing discards it. Generate rereads the active config path and runs mobile-compatible AES-256-GCM encryption off the UI thread. Show progress and retryable errors, clear stale ciphertext on a key change or retry, and enable copying only after success. Never display plaintext configuration or include credentials in errors."
+    },
+    "ConfigImport": {
+      "when": "Explicit import from encrypted file or HTTPS URL in the Web reader",
+      "width": "{tokens.layout.notification}",
+      "backgroundColor": "{tokens.color.canvas}",
+      "behavior": "Native modal dialog with source, cipher and password fields; browser-only decryption; preview and select accounts before saving. Preserve other accounts and desktop general settings. Never persist the decryption key."
     },
     "ReplyWindow": {
       "when": "Manual reply in a page-owned floating window with editable To/Cc, local correspondent search and attachments",

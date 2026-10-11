@@ -1,6 +1,7 @@
 import { ControlCore, MailboxCore, NotificationCore } from '../../../packages/jxui/core.js';
 import { MailService } from '../../services.js';
 import { ReplyCore } from '../../../packages/jxui/reply-core.js';
+import { ConfigImportCore } from '../../../packages/jxui/config-import-core.js';
 
 export function MessageCore(message, { service, options, expanded, changed, starredChanged = () => {}, started = () => {}, settled = () => {}, failed = () => {}, reply = () => {} }) {
   const core = ControlCore({ ...message, expanded, options, pending: false, error: '', status: '', autoAttempted: false,
@@ -138,6 +139,8 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
   const ui = {
     notifications,
     reply: ReplyCore({ service, timers, replied() { methods.refresh({ silent: true }); } }),
+    configImport: ConfigImportCore({ service, imported() { methods.init(); } }),
+    importMailboxes: control({ label: '导入邮箱配置' }, { click() { ui.configImport.open(); } }),
     search: control({ value: state.query.value }, { input() {},
       keydown(event) { if (event.key === 'Enter') { event.preventDefault(); methods.search(); } if (event.key === 'Escape') { state.query.as(''); ui.search.set({ value: '' }); methods.search(); } } }),
     searchButton: control({ label: '搜索邮件' }, { click() { methods.search(); } }),
@@ -159,7 +162,7 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
     retryDetail: control({ label: '重新加载邮件' }, { click() { methods.loadDetail(); } }),
     loadMore: control({ label: '加载后续邮件' }, { click() { methods.loadDetail(true); } }),
   };
-  controls.push(ui.reply);
+  controls.push(ui.reply, ui.configImport);
   function conversationIndex() {
     const selected = state.selected.value;
     return selected ? state.threads.value.findIndex(thread => thread.id === (selected.kind === 'message' ? selected.thread_id : selected.id)) : -1;
@@ -244,12 +247,12 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
       const groups = accounts.map(account => {
         let core = accountCores.get(account.id);
         if (!core) {
-          core = MailboxCore(account, { click() { methods.selectAccount(account.id); }, login(core) { return methods.startOAuth(core); } });
+          core = MailboxCore(account, { click() { methods.selectAccount(account.id); }, login(core) { return methods.startOAuth(core); }, saveOAuth(core) { return methods.saveOAuthSettings(core); } });
           accountCores.set(account.id, core);
         } else {
           // Keep folder VNodes and focus when only the sync status changes.
           const folders = JSON.stringify(core.state.folders) === JSON.stringify(account.folders) ? core.state.folders : account.folders;
-          if (core.state.email !== account.email || core.state.platform !== account.platform || core.state.provider !== account.provider || folders !== core.state.folders || JSON.stringify(core.state.status) !== JSON.stringify(account.status)) {
+          if (core.state.email !== account.email || core.state.platform !== account.platform || core.state.provider !== account.provider || folders !== core.state.folders || JSON.stringify(core.state.status) !== JSON.stringify(account.status) || JSON.stringify(core.state.oauth_config) !== JSON.stringify(account.oauth_config)) {
             core.updateAccount({ ...account, folders });
           }
         }
@@ -262,6 +265,18 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
       if (groups.length !== state.accountGroups.value.length || groups.some((core, i) => core !== state.accountGroups.value[i])) state.accountGroups.as(groups);
       updateFolders(); updateGroupSelection();
       return result;
+    },
+    async saveOAuthSettings(core) {
+      if (destroyed || core.state.oauth.busy) return;
+      const { client_id, token_endpoint } = core.state.oauthDraft;
+      if (!client_id.trim()) { core.set({ oauth: { state: 'failed', busy: false, error: '请填写 OAuth 应用 ID（Client ID）' } }); return; }
+      core.set({ oauth: { state: 'saving', busy: true } });
+      try {
+        await service.saveOAuthSettings(core.state.id, { client_id: client_id.trim(), token_endpoint: token_endpoint.trim() });
+        if (destroyed) return;
+        await methods.loadMailboxes();
+        if (!destroyed) core.set({ oauth: { state: 'idle', busy: false } });
+      } catch (error) { if (!destroyed) core.set({ oauth: { state: 'failed', busy: false, error: error.message } }); }
     },
     async startOAuth(core) {
       const id = core.state.id;

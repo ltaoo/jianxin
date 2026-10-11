@@ -1,4 +1,15 @@
 <resources>
-    <color name="mail_primary">#0066ff</color>
-    <color name="mail_primaryForeground">#ffffff</color>
+    <color name="mail_canvas">#fff9f9ff</color>
+    <color name="mail_recessed">#fff0f2f8</color>
+    <color name="mail_fill">#ffe4ecff</color>
+    <color name="mail_line">#ffd8dee9</color>
+    <color name="mail_text">#ff1a1c20</color>
+    <color name="mail_muted">#ff555f71</color>
+    <color name="mail_primary">#ff245da8</color>
+    <color name="mail_selected">#ffd9e5ff</color>
+    <color name="mail_danger">#ffba1a1a</color>
+    <color name="mail_primaryForeground">#ffffffff</color>
+    <color name="mail_surfaceContainer">#ffedf0f8</color>
+    <color name="mail_onPrimaryContainer">#ff001b3f</color>
+    <color name="mail_outline">#ff74777f</color>
 </resources>

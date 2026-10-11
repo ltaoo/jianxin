@@ -11,6 +11,21 @@ class ConfigTests {
     private val plain get() = fixture.getString("plaintext").toByteArray()
     private fun rejects(work: () -> Unit) { try { work(); fail("invalid configuration accepted") } catch (_: MailException) { } }
     @Test fun nodeUnicodeCryptoInteroperability() { assertArrayEquals(plain,ConfigEncryption.decrypt(envelope,password,ConfigCipher.LEGACY_JSON)) }
+    @Test fun fileReadDecryptAndImportCompleteAccounts() {
+        for (method in ConfigCipher.entries) {
+            val bytes = if (method == ConfigCipher.LEGACY_JSON) envelope else fixture.getString(method.code).toByteArray()
+            val found = bytes.inputStream().use { ConfigFile.read(it,password,method) }
+            val expected = JianxinConfig.parse(plain).accounts
+            assertEquals(expected.map { it.copy(id = "") },found.accounts.map { it.copy(id = "") })
+            rejects { bytes.inputStream().use { ConfigFile.read(it,"wrong",method) } }
+        }
+    }
+    @Test fun fileStreamSizeEmptyAndReadErrors() {
+        rejects { ByteArray(ConfigEncryption.LIMIT+1).inputStream().use { ConfigFile.read(it,password,ConfigCipher.AES256) } }
+        rejects { byteArrayOf().inputStream().use { ConfigFile.read(it,password,ConfigCipher.AES256) } }
+        val broken = object : java.io.InputStream() { override fun read(): Int = throw java.io.IOException("unreadable document") }
+        try { ConfigFile.read(broken,password,ConfigCipher.AES256); fail("read error ignored") } catch (_: java.io.IOException) { }
+    }
     @Test fun wrongPasswordTamperingAndParametersRejected() {
         rejects { ConfigEncryption.decrypt(envelope,"wrong",ConfigCipher.LEGACY_JSON) }
         val modified = JSONObject(envelope.toString(Charsets.UTF_8)).put("tag","AAAAAAAAAAAAAAAAAAAAAA==")

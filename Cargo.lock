@@ -3918,6 +3918,7 @@ dependencies = [
  "clap",
  "dirs",
  "dotenvy",
+ "embed-resource",
  "jianxin-agent",
  "jianxin-config",
  "jianxin-core",
@@ -3935,6 +3936,7 @@ dependencies = [
  "ureq",
  "uuid",
  "windows 0.61.3",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3974,6 +3976,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "clap",
+ "embed-resource",
  "fs2",
  "gpui-kit",
  "image",

@@ -1,8 +1,30 @@
 <resources>
-    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="Base.AppTheme" parent="Theme.Material3.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">@color/mail_primary</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowActionModeOverlay">true</item>
+        <item name="colorPrimary">@color/mail_primary</item>
+        <item name="colorOnPrimary">@color/mail_primaryForeground</item>
+        <item name="colorPrimaryContainer">@color/mail_selected</item>
+        <item name="colorOnPrimaryContainer">@color/mail_onPrimaryContainer</item>
+        <item name="colorSecondaryContainer">@color/mail_fill</item>
+        <item name="colorOnSecondaryContainer">@color/mail_onPrimaryContainer</item>
+        <item name="colorSurface">@color/mail_canvas</item>
+        <item name="colorOnSurface">@color/mail_text</item>
+        <item name="colorSurfaceVariant">@color/mail_surfaceContainer</item>
+        <item name="colorSurfaceContainer">@color/mail_surfaceContainer</item>
+        <item name="colorSurfaceContainerLow">@color/mail_canvas</item>
+        <item name="colorSurfaceContainerLowest">@color/mail_canvas</item>
+        <item name="colorSurfaceContainerHigh">@color/mail_recessed</item>
+        <item name="colorSurfaceContainerHighest">@color/mail_fill</item>
+        <item name="colorOutlineVariant">@color/mail_line</item>
+        <item name="colorOnSurfaceVariant">@color/mail_muted</item>
+        <item name="colorOutline">@color/mail_outline</item>
+        <item name="colorError">@color/mail_danger</item>
+        <item name="android:windowBackground">@color/mail_canvas</item>
+        <item name="android:statusBarColor">@color/mail_canvas</item>
+        <item name="android:navigationBarColor">@color/mail_canvas</item>
     </style>
+    <style name="AppTheme" parent="Base.AppTheme" />
 </resources>

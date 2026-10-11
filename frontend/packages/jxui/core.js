@@ -25,15 +25,22 @@ export function MailboxCore(account, actions) {
   };
   const problem = next => ['warning', 'error'].includes(next.status?.tone) ? next.status.label || '邮箱状态异常' : '';
   const core = ControlCore({ ...account, platformIcon: platformIcon(account), problem: problem(account),
-    active: false, expanded: true, statusOpen: false, oauth: { state: 'idle', busy: false } }, actions);
+    active: false, expanded: true, statusOpen: false, oauth: { state: 'idle', busy: false },
+    oauthDraft: { client_id: account.oauth_config?.client_id || '', token_endpoint: account.oauth_config?.token_endpoint || '' } }, actions);
   return Object.assign(core, {
     toggle() { core.set({ expanded: !core.state.expanded }); },
     toggleStatus() { if (core.state.problem) core.set({ statusOpen: !core.state.statusOpen }); },
     closeStatus() { if (core.state.statusOpen) core.set({ statusOpen: false }); },
-    startOAuth() { if (core.state.status?.state === 'oauth_required' && !core.state.oauth.busy) return actions?.login?.(core); },
+    startOAuth() { if (core.state.status?.state === 'oauth_required' && !core.state.oauth.busy && !core.state.oauth_config?.needs_setup) return actions?.login?.(core); },
+    editOAuth(field, value) {
+      if (!core.state.oauth.busy && ['client_id', 'token_endpoint'].includes(field)) core.set({ oauthDraft: { ...core.state.oauthDraft, [field]: value } });
+    },
+    saveOAuthSettings() { if (!core.state.oauth.busy) return actions?.saveOAuth?.(core); },
     updateAccount(next) {
       const nextProblem = problem(next);
       core.set({ ...next, platformIcon: platformIcon(next), problem: nextProblem,
+        ...(JSON.stringify(next.oauth_config) !== JSON.stringify(core.state.oauth_config)
+          ? { oauthDraft: { client_id: next.oauth_config?.client_id || '', token_endpoint: next.oauth_config?.token_endpoint || '' } } : {}),
         statusOpen: !!nextProblem && nextProblem === core.state.problem && core.state.statusOpen });
     },
   });

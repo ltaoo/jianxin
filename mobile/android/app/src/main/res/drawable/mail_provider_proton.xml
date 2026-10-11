@@ -1,0 +1,27 @@
+<!-- Generated from assets/mail-providers/svg-exact/proton.svg -->
+<vector xmlns:aapt="http://schemas.android.com/aapt" xmlns:android="http://schemas.android.com/apk/res/android" android:width="32dp" android:height="32dp" android:viewportWidth="16" android:viewportHeight="16">
+  <path android:pathData="M0 12V3.513l5.057 4.178a1.5 1.5 0 0 0 1.896.013L8.375 6.56l.594-.47v-.005L13 2.86V14H2a2 2 0 0 1-2-2Z">
+    <aapt:attr name="android:fillColor">
+      <gradient android:type="radial" android:centerX="12.943" android:centerY="4.224" android:gradientRadius="15.67925">
+        <item android:offset=".556" android:color="#6D4AFF" />
+        <item android:offset=".994" android:color="#AA8EFF" />
+      </gradient>
+    </aapt:attr>
+  </path>
+  <path android:pathData="M0 3.513 5.057 7.69a1.5 1.5 0 0 0 1.896.013L8.375 6.56l.594-.47v-.006l-.344.276a1 1 0 0 1-1.25 0L1.22 1.434A.75.75 0 0 0 0 2.02v1.493Z">
+    <aapt:attr name="android:fillColor">
+      <gradient android:type="linear" android:startX="5.3" android:startY="8.097" android:endX="2.048" android:endY="-5.711">
+        <item android:offset="0" android:color="#E3D9FF" />
+        <item android:offset="1" android:color="#7341FF" />
+      </gradient>
+    </aapt:attr>
+  </path>
+  <path android:pathData="M16 12V2.02a.75.75 0 0 0-1.219-.586L13 2.86V14h1a2 2 0 0 0 2-2Z">
+    <aapt:attr name="android:fillColor">
+      <gradient android:type="linear" android:startX="20.528" android:startY="22.254" android:endX="7.258" android:endY="-2.929">
+        <item android:offset=".271" android:color="#E3D9FF" />
+        <item android:offset="1" android:color="#7341FF" />
+      </gradient>
+    </aapt:attr>
+  </path>
+</vector>

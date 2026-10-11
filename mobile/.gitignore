@@ -2,6 +2,7 @@ android/.gradle/
 android/.kotlin/
 android/**/build/
 android/local.properties
+android/signing/
 ios/build/
 ios/**/xcuserdata/
 artifacts/

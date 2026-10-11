@@ -278,6 +278,34 @@ impl AccountConfig {
         account
     }
 
+    /// Keep an OAuth mailbox before its first login, like the mobile client.
+    /// Credential resolution belongs to the connection/login step.
+    pub fn needs_authorization(&self) -> bool {
+        let AuthConfig::OAuth2 { access_token, token_command, refresh_token, client_id, token_endpoint, .. } = &self.auth else {
+            return false;
+        };
+        !access_token.as_ref().is_some_and(SecretRef::has_value)
+            && !token_command.as_ref().is_some_and(|command| !command.trim().is_empty())
+            && !(refresh_token.as_ref().is_some_and(SecretRef::has_value)
+                && client_id.as_ref().is_some_and(|id| !id.trim().is_empty())
+                && token_endpoint.as_ref().is_some_and(|endpoint| !endpoint.trim().is_empty()))
+    }
+
+    pub fn apply_oauth_defaults(&mut self) {
+        let microsoft = self.provider == Some(ProviderId::Microsoft)
+            || presets::detect(&self.email).is_some_and(|preset| preset.provider == ProviderId::Microsoft);
+        let AuthConfig::OAuth2 { token_endpoint, scopes, .. } = &mut self.auth else { return; };
+        let microsoft = microsoft || token_endpoint.as_deref().is_some_and(|endpoint| endpoint.starts_with("https://login.microsoftonline.com/"));
+        if microsoft {
+            if token_endpoint.as_ref().is_none_or(|endpoint| endpoint.trim().is_empty()) {
+                *token_endpoint = Some("https://login.microsoftonline.com/consumers/oauth2/v2.0/token".into());
+            }
+            if scopes.is_none() {
+                *scopes = Some(vec!["offline_access".into(), "https://outlook.office.com/IMAP.AccessAsUser.All".into(), "https://outlook.office.com/SMTP.Send".into()]);
+            }
+        }
+    }
+
     pub fn validate(&self) -> Result<()> {
         if !self.email.contains('@') {
             return Err(MailError::new(
@@ -428,12 +456,12 @@ impl AuthConfig {
                 token_command,
                 ..
             } => {
-                if let Some(cmd) = token_command {
+                if let Some(cmd) = token_command.as_ref().filter(|cmd| !cmd.trim().is_empty()) {
                     return secret::run_command(cmd);
                 }
                 match access_token {
-                    Some(token) => token.resolve(),
-                    None => Err(MailError::new(
+                    Some(token) if token.has_value() => token.resolve(),
+                    _ => Err(MailError::new(
                         MailErrorCode::AuthenticationRequired,
                         "oauth2 account needs `access_token`, `token_command`, or `jianxin login`",
                     )),
@@ -456,29 +484,7 @@ impl AuthConfig {
                     ));
                 }
             }
-            AuthConfig::OAuth2 {
-                access_token,
-                token_command,
-                client_id,
-                client_secret: _,
-                refresh_token,
-                token_endpoint,
-                ..
-            } => {
-                let has_token = access_token.as_ref().is_some_and(|s| s.has_value());
-                let can_refresh = client_id.is_some()
-                    && token_endpoint.is_some()
-                    && refresh_token.as_ref().is_some_and(|s| s.has_value());
-                let can_login = client_id.is_some() && token_endpoint.is_some();
-                if token_command.is_none() && !has_token && !can_refresh && !can_login {
-                    return Err(MailError::new(
-                        MailErrorCode::InvalidConfig,
-                        format!(
-                            "account `{alias}` is oauth2 but has none of `access_token`, `token_command`, refresh credentials, or `client_id` + `token_endpoint` for login"
-                        ),
-                    ));
-                }
-            }
+            AuthConfig::OAuth2 { .. } => {},
         }
         Ok(())
     }
@@ -520,6 +526,7 @@ impl AppConfig {
             )
         })?;
         for account in &mut config.accounts {
+            account.apply_oauth_defaults();
             account.source_path = Some(path.to_path_buf());
         }
         for account in &config.accounts {
@@ -773,6 +780,29 @@ mod tests {
         cfg.accounts[0]
             .validate()
             .expect("login-only oauth2 is valid");
+    }
+
+    #[test]
+    fn unconfigured_oauth_mailboxes_load_before_login_and_outlook_gets_mobile_defaults() {
+        let path = std::env::temp_dir().join(format!("jianxin-pending-oauth-{}.json", jianxin_domain::new_id()));
+        std::fs::write(&path, r#"{"accounts":[
+            {"email":"pending@outlook.com","auth":{"type":"oauth2"}},
+            {"email":"other@example.com","auth":{"type":"o_auth2","access_token":""}},
+            {"email":"user@company.example","auth":{"type":"oauth2","token_endpoint":"https://login.microsoftonline.com/common/oauth2/v2.0/token"}}
+        ]}"#).unwrap();
+        let config = AppConfig::load(&path).unwrap();
+        assert_eq!(config.accounts.len(), 3);
+        assert!(config.accounts.iter().all(AccountConfig::needs_authorization));
+        let AuthConfig::OAuth2 { token_endpoint, scopes, client_id, .. } = &config.accounts[0].auth else { panic!("expected oauth2"); };
+        assert_eq!(token_endpoint.as_deref(), Some("https://login.microsoftonline.com/consumers/oauth2/v2.0/token"));
+        assert!(scopes.as_ref().unwrap().iter().any(|scope| scope == "offline_access"));
+        assert!(client_id.is_none());
+        let AuthConfig::OAuth2 { scopes, .. } = &config.accounts[2].auth else { panic!("expected oauth2"); };
+        assert!(scopes.as_ref().unwrap().iter().any(|scope| scope == "https://outlook.office.com/IMAP.AccessAsUser.All"));
+        assert_eq!(config.accounts[1].auth.access_token().unwrap_err().code, MailErrorCode::AuthenticationRequired);
+        std::fs::write(&path, r#"{"accounts":[{"email":"missing@example.com","auth":{"type":"password","password":""}}]}"#).unwrap();
+        assert!(AppConfig::load(&path).is_err());
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

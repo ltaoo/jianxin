@@ -519,6 +519,37 @@ test('OAuth startup errors can retry and unsafe authorization URLs never become 
   model.methods.destroy(); model.destroy();
 });
 
+test('pending OAuth accounts remain visible, accept missing application settings, and authorize only on a manual click', async () => {
+  const endpoint = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token';
+  let account = { id: 'pending', email: 'pending@outlook.com', folders: [], provider: 'microsoft',
+    status: { state: 'oauth_required', tone: 'warning', label: '等待 OAuth 登录' },
+    oauth_config: { client_id: '', token_endpoint: endpoint, needs_setup: true } };
+  let saves = 0, starts = 0;
+  const model = InboxPageModel({ ...environment(), service: {
+    async mailboxes() { return { accounts: [account] }; }, async threads() { return { threads: [], more: false }; },
+    async saveOAuthSettings(id, settings) {
+      saves++; assert.equal(id, 'pending'); assert.equal(settings.client_id, 'application-id');
+      account = { ...account, oauth_config: { ...settings, needs_setup: false } };
+      return { saved: true };
+    },
+    async startOAuth() { starts++; return { state: 'failed', busy: false, error: 'fixture-no-network' }; },
+  } });
+  await model.methods.init(); const core = model.state.accountGroups.value[0];
+  assert.equal(core.state.email, 'pending@outlook.com'); assert.equal(starts, 0);
+  core.toggleStatus();
+  const view = MailboxGroup({ store: core, root: '/secret' }, () => null);
+  const find = (node, name) => node?.state?.attributes?.n === name ? node : node?.children?.map(child => find(child, name)).find(Boolean);
+  assert.ok(find(view, 'mailbox-oauth-setup')); assert.equal(find(view, 'start-mailbox-oauth').state.attributes.disabled, '');
+  await core.startOAuth(); assert.equal(starts, 0);
+  core.editOAuth('client_id', 'application-id'); await model.methods.refreshStatuses();
+  assert.equal(core.state.oauthDraft.client_id, 'application-id');
+  await core.saveOAuthSettings(); assert.equal(saves, 1); assert.equal(starts, 0);
+  assert.equal(core.state.oauth_config.needs_setup, false);
+  assert.equal(find(view, 'start-mailbox-oauth').state.attributes.disabled, undefined);
+  await core.startOAuth(); assert.equal(starts, 1);
+  view.onUnmounted(); model.methods.destroy(); model.destroy();
+});
+
 test('global mailbox totals remain independent of pages and filters and refresh to zero', async () => {
   let counts = { total: 1234, unread: 321 }, fail = false;
   const model = InboxPageModel({ ...environment(), service: {

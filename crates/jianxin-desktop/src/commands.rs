@@ -1,8 +1,14 @@
 use anyhow::{Context, Result};
 use std::{
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::{Child, Command, Stdio},
+    sync::mpsc,
+    time::{Duration, SystemTime},
 };
+
+#[path = "../../../platform/browser.rs"]
+mod browser;
 
 #[derive(Clone)]
 pub struct Commands {
@@ -66,28 +72,76 @@ impl Commands {
         anyhow::ensure!(output.status.success(), "background mail polling did not stop");
         Ok(())
     }
-    pub fn open(&self, message: Option<&str>) -> Result<()> {
-        let mut command = self.command();
-        if let Some(id) = message {
-            command.arg("open").arg("--").arg(id);
-        } else {
-            command.args(["web", "--port", "0", "--idle-seconds", "1800", "--open"]);
-        }
-        if message.is_some() {
-            let output = command.output().context("cannot start mail reader")?;
-            anyhow::ensure!(output.status.success(), "mail reader failed to start");
-        } else {
-            let mut child = command
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .context("cannot start mail reader")?;
-            std::thread::spawn(move || {
-                let _ = child.wait();
-            });
-        }
-        Ok(())
+}
+
+/// A reader worker owns the child so repeated tray clicks reuse a running Web
+/// service. It runs independently of mail polling and snapshot loading.
+pub struct Reader {
+    commands: Commands,
+    service: Option<(Child, String, Option<SystemTime>)>,
+}
+
+impl Reader {
+    pub fn new(commands: Commands) -> Self {
+        Self { commands, service: None }
     }
+
+    pub fn open(&mut self, message: Option<&str>) -> Result<()> {
+        if let Some(id) = message {
+            let output = self.commands.command().arg("open").arg("--").arg(id)
+                .output().context("无法启动邮件阅读器")?;
+            anyhow::ensure!(output.status.success(), "邮件阅读器启动失败");
+            return Ok(());
+        }
+        self.ensure_service()?;
+        let (_, url, _) = self.service.as_ref().context("阅读器地址不可用")?;
+        browser::open(url).with_context(|| format!("请手动打开 {url}"))
+    }
+
+    fn ensure_service(&mut self) -> Result<()> {
+        let config_modified = std::fs::metadata(&self.commands.config)
+            .and_then(|metadata| metadata.modified()).ok();
+        if let Some((child, _, previous_config)) = self.service.as_mut() {
+            if child.try_wait()?.is_none() && *previous_config == config_modified { return Ok(()); }
+        }
+        if let Some((mut previous, _, _)) = self.service.take() {
+            // Existing tabs keep working when a config change needs a new
+            // service. Reap the old process when its idle timeout expires.
+            std::thread::spawn(move || { let _ = previous.wait(); });
+        }
+        let mut child = self.commands.command()
+            .args(["web", "--port", "0", "--idle-seconds", "1800"])
+            .stdout(Stdio::piped()).stderr(Stdio::null())
+            .spawn().context("无法启动本地 Web 服务，请检查同目录的 jianxin 程序")?;
+        let stdout = child.stdout.take().context("无法读取阅读器地址")?;
+        let (ready, address) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut url = String::new();
+            let result = BufReader::new(stdout).read_line(&mut url).map(|_| url);
+            let _ = ready.send(result);
+        });
+        let result = (|| -> Result<String> {
+            let url = address.recv_timeout(Duration::from_secs(10))
+                .context("本地 Web 服务未及时响应，请重试")??;
+            let url = url.trim();
+            anyhow::ensure!(is_reader_url(url), "本地 Web 服务启动失败，未返回有效地址");
+            anyhow::ensure!(child.try_wait()?.is_none(), "本地 Web 服务启动后退出，请重试");
+            Ok(url.to_owned())
+        })();
+        match result {
+            Ok(url) => { self.service = Some((child, url, config_modified)); Ok(()) }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                Err(error)
+            }
+        }
+    }
+}
+
+fn is_reader_url(url: &str) -> bool {
+    url.strip_prefix("http://127.0.0.1:").and_then(|value| value.strip_suffix('/'))
+        .and_then(|port| port.parse::<u16>().ok()).is_some_and(|port| port > 0)
 }
 
 pub fn instance_lock(data_dir: &Path) -> Result<Option<std::fs::File>> {
@@ -113,6 +167,13 @@ pub fn instance_lock(data_dir: &Path) -> Result<Option<std::fs::File>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn reader_accepts_only_a_loopback_service_address() {
+        assert!(is_reader_url("http://127.0.0.1:55385/"));
+        for address in ["", "http://127.0.0.1:0/", "http://example.com/", "http://127.0.0.1:80@evil.test/", "http://127.0.0.1:80/path"] {
+            assert!(!is_reader_url(address));
+        }
+    }
     #[test]
     fn second_instance_is_rejected_until_the_owner_exits() {
         let directory =

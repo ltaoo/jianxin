@@ -43,6 +43,7 @@ dirs = "5"
 dotenvy = "0.15"
 base64 = "0.22"
 ureq = "2"
+embed-resource = "3.0"
 
 # Network / mail protocols
 imap = "2.4"
@@ -63,10 +64,14 @@ clap = { version = "4", features = ["derive"] }
 ratatui = "0.29"
 
 [profile.release]
-opt-level = 2
-strip = true
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+debug = 0
+strip = "symbols"
 
-# Smaller app bundle without changing the normal CLI release profile.
+# Named profile used by the macOS app packaging script.
 [profile.macos-app]
 inherits = "release"
 opt-level = "s"

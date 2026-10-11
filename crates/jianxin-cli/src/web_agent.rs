@@ -45,6 +45,34 @@ impl Manager {
             .reload_config(config)?;
         Ok(())
     }
+    pub fn import_accounts(&mut self, path: &Path, accounts: Vec<jianxin_config::AccountConfig>) -> Result<()> {
+        let mut stored = jianxin_config::AppConfig::load(path)?;
+        for mut account in accounts {
+            account.source_path = Some(path.to_path_buf());
+            let id = account.to_account().id;
+            if let Some(existing) = stored.accounts.iter_mut().find(|existing| existing.to_account().id == id) {
+                *existing = account;
+            } else {
+                stored.accounts.push(account);
+            }
+        }
+        let app = Arc::get_mut(&mut self.app).context("正在处理邮件，请稍后导入")?;
+        let previous = app.config().clone();
+        let mut runtime = previous.clone();
+        runtime.accounts = stored.accounts.clone();
+        let temporary = path.with_extension(format!("import-{}.tmp", uuid::Uuid::new_v4()));
+        let result = (|| -> Result<()> {
+            stored.save(&temporary)?;
+            app.reload_config(runtime)?;
+            if let Err(error) = std::fs::rename(&temporary, path) {
+                app.reload_config(previous)?;
+                return Err(error.into());
+            }
+            Ok(())
+        })();
+        let _ = std::fs::remove_file(temporary);
+        result
+    }
     fn scope(&self, value: &str) -> Result<String> {
         if value.is_empty() {
             return Ok(String::new());
@@ -65,7 +93,7 @@ impl Manager {
             return Reply::json(400, json!({"error":"此邮箱需要配置 OAuth client_id 和 token_endpoint"}));
         };
         if client_id.trim().is_empty() || !endpoint.ends_with("/token") {
-            return Reply::json(400, json!({"error":"请检查 OAuth client_id 和 token_endpoint 配置"}));
+            return Reply::json(400, json!({"error":"请先填写并保存 OAuth 应用 ID 和令牌端点，再开始授权"}));
         }
         if logins.get(&account).is_some_and(|login| login["busy"] == true) {
             return Reply::json(200, logins[&account].clone());

@@ -20,12 +20,20 @@ export function MailService(root, request = fetch) {
   }
   return {
     mailboxes: signal => json('api/mailboxes', { signal }),
+    configSource: (url, signal) => json('api/config/source', { method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', 'X-Jianxin-Request': '1' }, body: JSON.stringify({ url }) }),
+    configPreview: (config, signal) => json('api/config/preview', { method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', 'X-Jianxin-Request': '1' }, body: JSON.stringify(config) }),
+    configImport: config => json('api/config/import', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Jianxin-Request': '1' }, body: JSON.stringify(config) }),
     reloadMailboxes: signal => json('api/mailboxes/reload', {
       method: 'POST', headers: { 'X-Jianxin-Request': '1' }, signal,
     }),
     startOAuth: (id, signal) => json(`api/mailboxes/oauth?${new URLSearchParams({ account: id })}`, {
       method: 'POST', headers: { 'X-Jianxin-Request': '1' }, signal,
     }),
+    saveOAuthSettings: (account, settings) => json('api/mailboxes/oauth-settings', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Jianxin-Request': '1' }, body: JSON.stringify({ account, ...settings }) }),
     oauthStatus: (id, signal) => json(`api/mailboxes/oauth?${new URLSearchParams({ account: id })}`, { signal }),
     threads: (params, signal) => json(`api/threads?${new URLSearchParams(params)}`, { signal }),
     detail: (kind, id, page, signal, folder = '') => json(`api/${kind}/${encodeURIComponent(id)}?${new URLSearchParams({ page, folder: kind === 'thread' ? folder : '' })}`, { signal }),

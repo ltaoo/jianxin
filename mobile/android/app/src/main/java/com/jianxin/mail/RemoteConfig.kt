@@ -83,9 +83,21 @@ object JianxinConfig {
                 if (type !in listOf("password", "app_password", "oauth2", "o_auth2")) throw MailException("不支持此认证方式")
                 account.oauth2 = type == "oauth2" || type == "o_auth2"
                 val secret = auth.opt(if (account.oauth2) "access_token" else "password")
-                if (secret !is String || secret.isEmpty()) throw MailException("需要字符串形式的密码或访问令牌；手机不能读取桌面端凭据引用")
-                account.credential = secret; account.username = auth.text("username")
+                if (!account.oauth2 && (secret !is String || secret.isEmpty())) throw MailException("需要字符串形式的密码；手机不能读取桌面端凭据引用")
+                account.credential = secret as? String ?: ""; account.username = auth.text("username")
+                if (account.oauth2) {
+                    val outlook = account.email.substringAfterLast('@').lowercase(java.util.Locale.ROOT) in listOf("outlook.com","hotmail.com","live.com","office365.com") ||
+                        row.text("provider") in listOf("microsoft","outlook") || auth.text("token_endpoint").startsWith("https://login.microsoftonline.com/")
+                    if (outlook) {
+                        val endpoint = auth.text("token_endpoint",MicrosoftOAuth.DEFAULT_ENDPOINT)
+                        MicrosoftOAuth.endpoint(endpoint)
+                        val scopes = auth.optJSONArray("scopes")?.let { array -> (0 until array.length()).map { array.getString(it) } } ?: MicrosoftOAuth.DEFAULT_SCOPES
+                        // Desktop credential references are intentionally replaced by a fresh phone login.
+                        account.oauthSettings = OAuthSettings(auth.opt("client_id") as? String ?: "",endpoint,scopes)
+                    }
+                }
                 account.displayName = row.text("display_name", row.text("id"))
+                account.platform = row.text("platform"); account.provider = row.text("provider")
                 val domain = account.email.substringAfterLast('@').lowercase(java.util.Locale.ROOT)
                 val preset = presets[domain] ?: listOf("imap.$domain", "smtp.$domain", "465", "tls")
                 account.imapHost = preset[0]; account.smtpHost = preset[1]; account.smtpPort = preset[2].toInt(); account.smtpStartTLS = preset[3] == "starttls"
@@ -103,7 +115,8 @@ object JianxinConfig {
                 account.validate()
                 if (!seen.add(account.importIdentity)) throw MailException("配置中有重复邮箱和收信服务器")
                 accounts.add(account)
-                if (account.oauth2) warnings.add("第 ${index + 1} 个账号使用已有 OAuth 令牌，到期后需更新配置；不导入桌面端刷新流程。")
+                if (account.needsAuthorization) warnings.add("第 ${index + 1} 个账号待授权，保存后点击邮箱完成登录。" + if (account.oauthSettings == null) "此服务商暂不支持手机授权，可在编辑中填入访问令牌。" else if (account.oauthSettings?.clientId.isNullOrBlank()) "请先在编辑中填写 OAuth Client ID。" else "")
+                else if (account.oauth2 && account.oauthSettings == null) warnings.add("第 ${index + 1} 个账号使用已有 OAuth 令牌，到期后需手动更新。")
             } catch (e: Exception) { warnings.add("第 ${index + 1} 个账号未导入：${if (e is MailException) e.message else "账号字段格式无效"}") }
         }
         if (root.has("general")) warnings.add("仅导入邮箱账号。桌面端 general 设置（含 API、Agent、同步策略）不应用到手机。")

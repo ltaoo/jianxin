@@ -9,6 +9,8 @@ mod output;
 mod notifications;
 mod watch;
 mod web;
+#[cfg(windows)]
+mod windows_launch;
 
 use std::path::{Path, PathBuf};
 
@@ -103,6 +105,9 @@ enum Command {
         /// Open the reader in your default browser.
         #[arg(long)]
         open: bool,
+        /// Open the encrypted mailbox import dialog in the Web reader.
+        #[arg(long)]
+        import_config: bool,
         /// Stop after this many idle seconds (0 keeps running).
         #[arg(long, default_value_t = 0)]
         idle_seconds: u64,
@@ -288,6 +293,10 @@ enum Command {
 }
 
 fn main() {
+    #[cfg(windows)]
+    if windows_launch::handle_double_click() {
+        return;
+    }
     // Load ./.env (current directory only) so JIANXIN_CONFIG and SecretRef
     // env passwords can live there; existing process env always wins.
     let _ = dotenvy::from_filename(".env");
@@ -328,7 +337,7 @@ fn run(cli: Cli) -> Result<()> {
         let name = if cfg!(windows) { "jianxin-desktop.exe" } else { "jianxin-desktop" };
         let sibling = executable.parent().context("cannot locate executable directory")?.join(name);
         let mut command = std::process::Command::new(if sibling.is_file() { sibling } else { name.into() });
-        command.arg("--config").arg(std::fs::canonicalize(&config_path)?)
+        command.arg("--config").arg(&config_path)
             .arg("--cli").arg(executable);
         if *show { command.arg("--show"); }
         if *no_daemon { command.arg("--no-daemon"); }
@@ -353,8 +362,8 @@ fn run(cli: Cli) -> Result<()> {
         Command::Doctor => cmd_doctor(&app, selector, &out),
         Command::Agent => jianxin_agent::run(app, &config_path),
         Command::Login => cmd_login(&app, &config_path, selector, &out),
-        Command::Web { port, message, open, idle_seconds } =>
-            web::run(app, &config_path, selector, port, message.as_deref(), open, idle_seconds),
+        Command::Web { port, message, open, import_config, idle_seconds } =>
+            web::run(app, &config_path, selector, port, message.as_deref(), open, import_config, idle_seconds),
         Command::Open { id, no_open } => web::open_message(&app, &config_path, selector, &id, no_open),
         Command::Sync { full, folder } => cmd_sync(&app, selector, full, folder.as_deref(), &out),
         Command::Watch {

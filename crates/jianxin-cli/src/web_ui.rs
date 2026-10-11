@@ -62,9 +62,18 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
                 &account.id,
                 !folders.is_empty(),
             );
+            let oauth_config = match &cfg.auth {
+                jianxin_config::AuthConfig::OAuth2 { client_id, token_endpoint, .. } => Some(serde_json::json!({
+                    "client_id":client_id.as_deref().unwrap_or(""), "token_endpoint":token_endpoint.as_deref().unwrap_or(""),
+                    "needs_setup":client_id.as_ref().is_none_or(|id| id.trim().is_empty())
+                        || token_endpoint.as_ref().is_none_or(|endpoint| endpoint.trim().is_empty()),
+                })),
+                _ => None,
+            };
             accounts.push(serde_json::json!({
                 "id":account.id, "email":account.email, "folders":folders,
                 "platform":cfg.platform, "provider":account.provider,
+                "oauth_config":oauth_config,
                 "status":{"state":status,"label":status.label(),"tone":status.tone()}
             }));
         }

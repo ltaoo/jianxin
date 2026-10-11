@@ -23,6 +23,8 @@ mod web_reply;
 
 #[path = "notification_hook.rs"]
 mod notification_hook;
+#[path = "web_config.rs"]
+mod web_config;
 
 const PAGE_SIZE: u32 = 50;
 const STYLE: &str = include_str!("web.css");
@@ -126,6 +128,7 @@ pub fn run(
     port: u16,
     hint: Option<&str>,
     open: bool,
+    import_config: bool,
     idle_seconds: u64,
 ) -> Result<()> {
     let api_token = app.config().general.api.token.as_ref().map(|token| token.resolve()).transpose()?;
@@ -145,7 +148,8 @@ pub fn run(
         .port();
     let host = format!("127.0.0.1:{port}");
     let root = String::new();
-    let url = reader_url(&host, selected.as_ref());
+    let mut url = reader_url(&host, selected.as_ref());
+    if import_config && selected.is_none() { url.push_str("#config-import"); }
     println!("{url}");
     std::io::stdout().flush()?;
     if open {
@@ -222,6 +226,24 @@ pub fn run(
                 respond(request, reply);
                 continue;
             }
+            if route == Some("api/config/import") {
+                last_request = Instant::now();
+                let reply = match Arc::get_mut(&mut agent) {
+                    None => Reply::json(409, serde_json::json!({"error": "正在处理邮件或授权，请稍后导入"})),
+                    Some(manager) => web_config::import(manager, config_path, request.as_reader()),
+                };
+                respond(request, reply);
+                continue;
+            }
+            if route == Some("api/mailboxes/oauth-settings") {
+                last_request = Instant::now();
+                let reply = match Arc::get_mut(&mut agent) {
+                    None => Reply::json(409, serde_json::json!({"error":"正在处理邮件或授权，请稍后保存授权设置"})),
+                    Some(manager) => web_config::oauth_settings(manager, config_path, request.as_reader()),
+                };
+                respond(request, reply);
+                continue;
+            }
             if active_writes
                 .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
                     (count < 4).then_some(count + 1)
@@ -244,7 +266,11 @@ pub fn run(
             let agent = Arc::clone(&agent);
             let config_path = config_path.to_path_buf();
             std::thread::spawn(move || {
-                let reply = if route == "api/notifications" {
+                let reply = if route == "api/config/source" {
+                    web_config::source(request.as_reader())
+                } else if route == "api/config/preview" {
+                    web_config::preview(&app, request.as_reader())
+                } else if route == "api/notifications" {
                     notification_hook::handle(&mut request)
                 } else if route.split('?').next() == Some("api/mailboxes/oauth") {
                     agent.oauth(&route, true, &config_path, &active)

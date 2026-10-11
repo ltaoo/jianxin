@@ -6,6 +6,7 @@
 *.sqlite-shm
 .DS_Store
 config.json
+!/mobile/tests/fixtures/config.json
 !config.example.json
 .env
 email.json
