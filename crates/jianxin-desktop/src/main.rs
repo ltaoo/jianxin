@@ -1,9 +1,11 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod commands;
-mod model;
+mod config_crypto;
+mod config_encryption;
 #[cfg(target_os = "macos")]
 mod macos;
+mod model;
 mod panel;
 mod placement;
 mod theme;
@@ -11,6 +13,7 @@ mod theme;
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use commands::Commands;
+use config_encryption::EncryptionWindow;
 use gpui_kit::*;
 use model::Snapshot;
 use panel::{ClosedAt, Panel};
@@ -59,6 +62,7 @@ struct Tray {
     show: MenuItem,
     reader: MenuItem,
     refresh: MenuItem,
+    encryption: MenuItem,
     quit: MenuItem,
 }
 
@@ -68,8 +72,9 @@ impl Tray {
         let show = MenuItem::new("查看未读邮件", true, None);
         let reader = MenuItem::new("打开邮件阅读器", true, None);
         let refresh = MenuItem::new("刷新未读列表", true, None);
+        let encryption = MenuItem::new("配置加密", true, None);
         let quit = MenuItem::new("退出应用", true, None);
-        menu.append_items(&[&show, &reader, &refresh, &quit])?;
+        menu.append_items(&[&show, &reader, &refresh, &encryption, &quit])?;
         let image = image::load_from_memory(include_bytes!("../../../assets/jianxin-icon.png"))?
             .thumbnail(32, 32)
             .into_rgba8();
@@ -90,6 +95,7 @@ impl Tray {
             show,
             reader,
             refresh,
+            encryption,
             quit,
         })
     }
@@ -99,6 +105,7 @@ struct Desktop {
     tray: Tray,
     window: Option<AnyWindowHandle>,
     panel: Option<Entity<Panel>>,
+    encryption: Rc<RefCell<EncryptionWindow>>,
     closed_at: ClosedAt,
     snapshot: Snapshot,
     requests: mpsc::SyncSender<Request>,
@@ -161,8 +168,9 @@ impl Desktop {
         let snapshot = self.snapshot.clone();
         let requests = self.requests.clone();
         let closed_at = self.closed_at.clone();
+        let encryption = self.encryption.clone();
         match gpui_kit::open_window(options, cx, |window, cx| {
-            cx.new(|cx| Panel::new(snapshot, requests, closed_at, window, cx))
+            cx.new(|cx| Panel::new(snapshot, requests, closed_at, encryption, window, cx))
         }) {
             Ok((window, panel)) => {
                 panel.update(cx, |panel, cx| {
@@ -234,7 +242,7 @@ fn main() -> Result<()> {
     if show_request.exists() {
         std::fs::remove_file(&show_request)?;
     }
-    let commands = Commands::resolve(options.cli, config_path)?;
+    let commands = Commands::resolve(options.cli, config_path.clone())?;
     let app = Arc::new(jianxin_core::App::new(config)?);
     let (requests, receiver) = mpsc::sync_channel(8);
     let (updates, incoming) = mpsc::channel();
@@ -295,6 +303,7 @@ fn main() -> Result<()> {
                         tray: Tray::new()?,
                         window: None,
                         panel: None,
+                        encryption: Rc::new(RefCell::new(EncryptionWindow::new(config_path))),
                         closed_at: Rc::new(RefCell::new(None)),
                         snapshot: Snapshot::default(),
                         requests,
@@ -359,6 +368,14 @@ fn main() -> Result<()> {
                             }
                             if event.id == *desktop.tray.refresh.id() {
                                 let _ = desktop.requests.try_send(Request::Refresh);
+                            }
+                            if event.id == *desktop.tray.encryption.id() {
+                                if desktop.encryption.borrow_mut().show(cx).is_err() {
+                                    desktop.apply(
+                                        Update::Error("配置加密窗口打开失败，重试打开".into()),
+                                        cx,
+                                    );
+                                }
                             }
                         }
                         false

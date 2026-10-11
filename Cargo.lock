@@ -3971,6 +3971,7 @@ name = "jianxin-desktop"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "clap",
  "fs2",
@@ -3983,9 +3984,11 @@ dependencies = [
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
+ "ring",
  "serde_json",
  "tray-icon",
  "windows-sys 0.61.2",
+ "zeroize",
 ]
 
 [[package]]

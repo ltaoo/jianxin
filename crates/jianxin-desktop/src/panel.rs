@@ -1,4 +1,4 @@
-use crate::{model::Snapshot, theme::Tokens, Request};
+use crate::{config_encryption::EncryptionWindow, model::Snapshot, theme::Tokens, Request};
 use gpui_kit::{
     component::{
         button::{Button, ButtonVariants},
@@ -19,6 +19,7 @@ pub struct Panel {
     _activation: Subscription,
     _appearance: Subscription,
     closed_at: ClosedAt,
+    encryption: Rc<RefCell<EncryptionWindow>>,
 }
 
 impl Panel {
@@ -26,6 +27,7 @@ impl Panel {
         snapshot: Snapshot,
         requests: SyncSender<Request>,
         closed_at: ClosedAt,
+        encryption: Rc<RefCell<EncryptionWindow>>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -51,6 +53,7 @@ impl Panel {
             _activation: activation,
             _appearance: appearance,
             closed_at,
+            encryption,
         }
     }
     fn dismiss(&mut self, window: &mut Window) {
@@ -206,12 +209,32 @@ impl Render for Panel {
                 .border_color(t.color("line"))
                 .child(
                     div()
-                        .text_size(t.length("type", "caption"))
-                        .text_color(t.color("muted"))
-                        .child(format!(
-                            "显示最新 {} 封 · 每 5 秒更新",
-                            crate::model::LIST_LIMIT
-                        )),
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            div()
+                                .text_size(t.length("type", "caption"))
+                                .text_color(t.color("muted"))
+                                .child(format!(
+                                    "显示最新 {} 封 · 每 5 秒更新",
+                                    crate::model::LIST_LIMIT
+                                )),
+                        )
+                        .child(
+                            Button::new("config-encryption")
+                                .ghost()
+                                .label("配置加密")
+                                .h(t.length("layout", "target"))
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    let result = panel.encryption.borrow_mut().show(cx);
+                                    if result.is_err() {
+                                        panel.action_error =
+                                            Some("配置加密窗口打开失败，重试打开".into());
+                                        cx.notify();
+                                    }
+                                })),
+                        ),
                 )
                 .child(
                     div()

@@ -1,9 +1,9 @@
 {
   "schema": "design.v1",
   "name": "jianxin-jxui",
-  "version": "1.7.2",
+  "version": "1.8.0",
   "status": "evolve",
-  "updated_at": "2026-10-08",
+  "updated_at": "2026-10-11",
   "agent": {
     "skill": "design",
     "instructions": "Read this contract before UI changes. Build pages with jxui components and Timeless store-driven models. Bind tokens; update the catalog when adding components; verify CSS against tokens. Never automate a browser."
@@ -152,7 +152,10 @@
       "composeRecipient": "10rem",
       "composeContacts": "14rem",
       "composeBody": "8rem",
-      "mailMenu": "14rem"
+      "mailMenu": "14rem",
+      "configEncryptionWidth": "42rem",
+      "configEncryptionHeight": "40rem",
+      "configEncryptionOutput": "12rem"
     },
     "elevation": {
       "flat": "none",
@@ -301,6 +304,16 @@
       "theme": "Follow system appearance at creation and while open; desktop dark colors use themes.desktop.dark.color, including text, errors, button hover, borders and scrollbars.",
       "footer": "Reader and refresh actions on the left; the bottom-right exit button stops background mail polling before quitting the desktop app. Failure keeps the app open with a retryable error. The tray menu exit action uses the same complete shutdown.",
       "rowContextMenu": "Mail rows have no hover tooltip and no left-click navigation. Right-click menu 在浏览器中打开 opens that exact message in the existing Web reader; follows current desktop theme."
+    },
+    "ConfigEncryptionWindow": {
+      "when": "Native GPUI Kit configuration encryption tool opened from the tray menu or unread panel",
+      "width": "{tokens.layout.configEncryptionWidth}",
+      "height": "{tokens.layout.configEncryptionHeight}",
+      "backgroundColor": "{tokens.color.canvas}",
+      "textColor": "{tokens.color.text}",
+      "typography": "{tokens.type.control}",
+      "controls": "Labelled read-only current config path, masked encryption key input, one primary generate button, read-only ciphertext textarea and secondary copy button; reuse native GPUI Kit Input, Textarea and Button controls with layout.target height, radius.control and desktop system appearance.",
+      "behavior": "A normal window remains open on blur; reopening activates the same form, closing discards it. Generate rereads the active config path and runs mobile-compatible AES-256-GCM encryption off the UI thread. Show progress and retryable errors, clear stale ciphertext on a key change or retry, and enable copying only after success. Never display plaintext configuration or include credentials in errors."
     },
     "ReplyWindow": {
       "when": "Manual reply in a page-owned floating window with editable To/Cc, local correspondent search and attachments",
