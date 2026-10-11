@@ -5,7 +5,7 @@ import json
 import struct
 import zlib
 root = Path(__file__).resolve().parents[1]
-colors = json.loads((root.parent / 'frontend/.design').read_text())['tokens']['color']
+colors = json.loads((root.parent / 'webpc/.design').read_text())['tokens']['color']
 size = 1024
 background = bytes.fromhex(colors['primary'][1:])
 foreground = bytes.fromhex(colors['primaryForeground'][1:])
@@ -23,7 +23,7 @@ scanlines=b''.join(b'\0'+pixels[3*y*size:3*(y+1)*size] for y in range(size))
 def chunk(name,data):
     return struct.pack('>I',len(data))+name+data+struct.pack('>I',zlib.crc32(name+data)&0xffffffff)
 png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',size,size,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(scanlines,9))+chunk(b'IEND',b'')
-assets=root/'ios/Jianxin/Assets.xcassets'
+assets=root.parent/'ios/Jianxin/Assets.xcassets'
 icon=assets/'AppIcon.appiconset';icon.mkdir(parents=True,exist_ok=True)
 (assets/'Contents.json').write_text(json.dumps({'info':{'author':'xcode','version':1}},indent=2)+'\n')
 (icon/'app-icon.png').write_bytes(png)

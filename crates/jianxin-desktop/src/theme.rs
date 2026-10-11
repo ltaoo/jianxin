@@ -12,7 +12,7 @@ pub struct Tokens {
 impl Tokens {
     pub fn load() -> Self {
         Self {
-            contract: serde_json::from_str(include_str!("../../../frontend/.design"))
+            contract: serde_json::from_str(include_str!("../../../webpc/.design"))
                 .expect("valid design contract"),
             dark: false,
         }

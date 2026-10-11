@@ -17,28 +17,27 @@
 - `src/services.js`：同源的本机邮件 / Agent API，写操作校验请求标记和 Origin。
 - `src/gallery.js`：组件示例页；不读取或修改真实邮件。
 - `vendor`：从本地 timeless 0.34.0 复制的 Lite / DOM 发布产物，保留 MIT 许可和 SHA256。
-- `dist`：提交到仓库的构建产物，由 Rust `include_str!` 打入可执行文件，无运行时 CDN。
+- `dist`：本地手动构建产物，已被 Git 忽略。Cargo 构建会在自己的 `OUT_DIR` 生成并嵌入同一套资源，无运行时 CDN。
 
 ## 构建与检查
 
 ```sh
-node frontend/build.mjs
-node frontend/build.mjs --check
-node --test frontend/tests/*.test.mjs
+npm ci --prefix webpc
+node webpc/build.mjs
+node webpc/build.mjs --check
+node --test webpc/tests/*.test.mjs
 cargo build -p jianxin-cli --bin jianxin
-python3 frontend/tests/reply-http.py target/debug/jianxin
+python3 webpc/tests/reply-http.py target/debug/jianxin
 # 本机模拟 OAuth 服务验证授权、凭据保存和配置刷新，无真实登录：
-python3 frontend/tests/http-smoke.py target/debug/jianxin
+python3 webpc/tests/http-smoke.py target/debug/jianxin
 # 构建后，以下检查使用本机模型和空邮箱，不打开浏览器：
-python3 frontend/tests/agent-http.py target/macos-app/jianxin
+python3 webpc/tests/agent-http.py target/macos-app/jianxin
 TMPDIR=/private/tmp cargo test -p jianxin-cli -p jianxin-store -p jianxin-core
 bash scripts/build-macos-app.sh --install
 ```
 
-构建器优先使用前端目录安装的 esbuild 0.27.4，否则使用相邻 `../timeless`
-已有的 pnpm 工具依赖；通过 `TIMELESS_ROOT` 指定另一个 timeless 目录。
-独立环境可在 `frontend` 运行 `npm install`，无需修改 timeless 项目。
-macOS 打包脚本先构建前端，再构建 CLI。普通 Cargo 构建使用已提交的 `dist`。
+构建器使用本目录的 esbuild 0.27.4，依赖由 `package-lock.json` 锁定。需要 Node.js 18+，首次构建前运行 `npm ci --prefix webpc`。
+CLI 的 Cargo build script 自动构建并嵌入 Web 资源，监听源码和设计契约变化；无需先生成 `dist`，也无需相邻的 timeless 项目。macOS、Windows、Linux 打包均使用这条构建链路。
 
 更新 timeless 时，应从对应版本的本地 `dist/timeless/<version>` 更新两份 runtime，
 同时更新 vendor manifest 和许可证，再重新执行全部非浏览器检查。

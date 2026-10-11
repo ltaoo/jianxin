@@ -79,7 +79,7 @@ bash scripts/build-macos-app.sh --install
 jianxin notifications --register
 ```
 
-Requires Xcode command line tools and Rust 1.92+ for the GPUI desktop. The Swift notification helper targets macOS 11+; the desktop runtime also needs a macOS version supported by GPUI Kit. The build script
+Requires Xcode command line tools, Rust 1.92+ for the GPUI desktop, and Node.js 18+ for the embedded Web client. Run `npm ci --prefix webpc` before the first build. The Swift notification helper targets macOS 11+; the desktop runtime also needs a macOS version supported by GPUI Kit. The build script
 produces a signed (ad-hoc, for local use) `~/Applications/Jianxin.app`, creates
 all icon sizes, and registers `com.jianxin.mail` with LaunchServices. Existing
 bundles are moved to the printed temporary build/backup directory, not deleted.

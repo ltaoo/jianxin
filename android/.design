@@ -1,0 +1,11 @@
+{
+  "schema": "design.v1",
+  "name": "jianxin-android-mail",
+  "version": "1.0.0",
+  "updated_at": "2026-10-12",
+  "extends": "../mobile/.design",
+  "agent": {
+    "skill": "design",
+    "instructions": "Follow the shared mobile/.design contract and its platforms.android rules. Generate native resources with mobile/tools/generate_theme.py --platform android and mobile/tools/generate_provider_icons.py from the repository root. Never invoke or automate a browser. Keep direct native IMAP/SMTP, verified TLS, Android Keystore storage and explicit confirmations for destructive mail actions."
+  }
+}

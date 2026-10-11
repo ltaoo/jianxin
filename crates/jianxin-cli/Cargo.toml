@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 description = "jianxin command line interface"
 default-run = "jianxin"
-build = "../../platform/windows/build.rs"
+build = "build.rs"
 
 [[bin]]
 name = "jianxin"

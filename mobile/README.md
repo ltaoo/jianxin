@@ -25,12 +25,12 @@ iOS 凭据仅存于设备 Keychain，缓存和草稿启用系统文件保护且�
 
 ### iOS
 
-最低 iOS 17，使用 Xcode 16 或更新版本。直接打开 [Jianxin.xcodeproj](ios/Jianxin.xcodeproj)，选择 Jianxin scheme。在 Signing & Capabilities 中设置你的开发团队，再选择 iPhone 运行。仓库不包含个人开发者签名配置。
+最低 iOS 17，使用 Xcode 16 或更新版本。直接打开 [Jianxin.xcodeproj](../ios/Jianxin.xcodeproj)，选择 Jianxin scheme。在 Signing & Capabilities 中设置你的开发团队，再选择 iPhone 运行。仓库不包含个人开发者签名配置。
 
 命令行无签名真机编译：
 
 ```sh
-xcodebuild -project mobile/ios/Jianxin.xcodeproj -scheme Jianxin \
+xcodebuild -project ios/Jianxin.xcodeproj -scheme Jianxin \
   -sdk iphoneos -configuration Release -destination 'generic/platform=iOS' \
   -derivedDataPath /tmp/jianxin-ios-release CODE_SIGNING_ALLOWED=NO build
 ```
@@ -49,7 +49,7 @@ TLS 测试生成临时自签名证书，在本机启动测试服务器，确认�
 最低 Android 8 / API 26，compile/target SDK 35。需要 JDK 17、Android SDK Platform 35 与 Build Tools 35，以及已配置的 `ANDROID_HOME`。首次运行 Gradle Wrapper 会下载构建依赖；Android UI 使用 AppCompat、DrawerLayout 和 Material Components，Release 使用 R8 和资源裁剪。
 
 ```sh
-cd mobile/android
+cd android
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleRelease
 ```
 
@@ -109,7 +109,7 @@ cd mobile/android
 
 “管理邮箱 → 添加邮箱”先选择 QQ、163、126、Gmail、Outlook、阿里云或其他邮箱，再填写邮箱地址、可选名称及密码/客户端授权码。服务商预填的服务器、端口、TLS、独立登录用户名和 OAuth 应用配置收在“高级设置”；其他邮箱默认展开。Outlook 可不填密码或令牌，保存后进行授权登录。
 
-Android 的 MD3 导航与多邮箱交互参考 [Thunderbird for Android](https://github.com/thunderbird/thunderbird-android) 的统一收件箱与邮箱抽屉模式。提供商映射沿用 `frontend/packages/jxui/core.js` 的 `platform` 优先、`provider` 回退规则；图形由 `assets/mail-providers/svg-exact` 生成原生 VectorDrawable，在抽屉、邮件列表与阅读页显示。旧版本没有保存这两个字段的账号按邮箱域名回退，自定义服务商显示通用邮件图标。
+Android 的 MD3 导航与多邮箱交互参考 [Thunderbird for Android](https://github.com/thunderbird/thunderbird-android) 的统一收件箱与邮箱抽屉模式。提供商映射沿用 `webpc/packages/jxui/core.js` 的 `platform` 优先、`provider` 回退规则；图形由 `assets/mail-providers/svg-exact` 生成原生 VectorDrawable，在抽屉、邮件列表与阅读页显示。旧版本没有保存这两个字段的账号按邮箱域名回退，自定义服务商显示通用邮件图标。
 
 ## 密码管理器接入
 
@@ -146,7 +146,7 @@ Outlook / Microsoft 365 的 OAuth 配置可以没有访问令牌或明文密码�
 
 ## 目录与设计
 
-`ios/Jianxin` 是独立 Swift 实现；`android/app` 是独立 Kotlin 实现。两端协议代码独立，测试均覆盖 MIME、回复头、密送、UIDVALIDITY、UIDPLUS 安全移动和 SMTP 接受/拒绝/未知结果。
+根目录的 `ios/Jianxin` 是独立 Swift 实现；`android/app` 是独立 Kotlin 实现。`mobile/` 保存两端共用的设计契约、测试、配置加密工具和资源生成脚本。两端协议代码独立，测试均覆盖 MIME、回复头、密送、UIDVALIDITY、UIDPLUS 安全移动和 SMTP 接受/拒绝/未知结果。
 
 Android 使用 `Theme.Material3.Light.NoActionBar` 和 [.design](.design) 的 `platforms.android` 色彩角色，通过主题生成器生成 Kotlin / XML 常量；iOS 继续使用现有 Web 端设计色彩。只更新 Android 主题与提供商图标时运行：
 
@@ -226,7 +226,7 @@ python3 mobile/tools/test_tls.py
 
 ### 在 Android 设备上检查 IMAP 兼容性
 
-仅连接一台设备，在 `mobile/android` 下执行以下命令。Windows 使用 `gradlew.bat` 替代 `./gradlew`。安装采用覆盖更新方式，保留应用的本地账号。
+仅连接一台设备，在 `android` 下执行以下命令。Windows 使用 `gradlew.bat` 替代 `./gradlew`。安装采用覆盖更新方式，保留应用的本地账号。
 
 ```bash
 ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest

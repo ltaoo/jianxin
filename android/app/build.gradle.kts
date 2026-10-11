@@ -29,7 +29,7 @@ android {
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
-    sourceSets.getByName("test").resources.srcDir("../../tests/fixtures")
+    sourceSets.getByName("test").resources.srcDir("../../mobile/tests/fixtures")
 }
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")

@@ -1,7 +1,7 @@
 {
   "schema": "design.v1",
   "name": "jianxin-native-mail",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "platforms": {
     "android": {
       "design_system": "Material Design 3",
@@ -16,7 +16,7 @@
       }
     }
   },
-  "extends": "../frontend/.design",
+  "extends": "../webpc/.design",
   "updated_at": "2026-10-12",
   "agent": {
     "skill": "design",
@@ -75,7 +75,7 @@
   ],
   "sources": [
     {
-      "path": "../frontend/.design",
+      "path": "../webpc/.design",
       "purpose": "Existing Jianxin visual contract"
     },
     {

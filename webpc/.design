@@ -1,9 +1,9 @@
 {
   "schema": "design.v1",
   "name": "jianxin-jxui",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "status": "evolve",
-  "updated_at": "2026-10-11",
+  "updated_at": "2026-10-12",
   "agent": {
     "skill": "design",
     "instructions": "Read this contract before UI changes. Build pages with jxui components and Timeless store-driven models. Bind tokens; update the catalog when adding components; verify CSS against tokens. Never automate a browser."
@@ -279,7 +279,7 @@
     },
     "Glyph": {
       "when": "Semantic UI icons via Timeless.Icon and the selected @timeless/inner-icons ASN registry",
-      "source": "frontend/vendor/timeless-icons.js"
+      "source": "webpc/vendor/timeless-icons.js"
     },
     "NotificationCenter": {
       "when": "Bounded error history, unread count, per-item read/unread and read all",
@@ -381,7 +381,7 @@
     }
   ],
   "exports": {
-    "css": "frontend/dist/app.css"
+    "css": "webpc/dist/app.css"
   },
   "locked": [],
   "omitted": [

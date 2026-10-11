@@ -11,7 +11,6 @@ if [[ "${1:-}" != "" && "${1:-}" != "--install" ]]; then
   exit 1
 fi
 export TMPDIR=/private/tmp
-node frontend/build.mjs
 cargo build --profile macos-app -p jianxin-cli --bin jianxin
 cargo build --profile macos-app -p jianxin-desktop --bin jianxin-desktop
 build_dir="$(mktemp -d /private/tmp/jianxin-app.XXXXXX)"

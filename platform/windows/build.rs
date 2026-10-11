@@ -1,7 +1,7 @@
 //! Embed the shared application icon into both Windows executables.
 use std::{env, fs, path::PathBuf};
 
-fn main() {
+pub fn main() {
     println!("cargo:rerun-if-changed=../../platform/windows/build.rs");
     if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;

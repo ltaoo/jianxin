@@ -17,7 +17,7 @@
 
 ## 构建与启动
 
-使用 Rust 1.92+。纯 CLI 仍可单独构建，不需要 GPUI。
+使用 Rust 1.92+ 和 Node.js 18+。首次构建前在仓库根目录运行 `npm ci --prefix webpc`；Cargo 会自动构建并嵌入 Web 资源。纯 CLI 仍可单独构建，不需要 GPUI。
 
 ```sh
 cargo build --locked -p jianxin-cli -p jianxin-desktop

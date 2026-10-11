@@ -2,8 +2,8 @@
 use super::*;
 use jianxin_store::reader_repo::{self, Filter};
 
-const SCRIPT: &str = include_str!("../../../frontend/dist/app.js");
-const CSS: &str = include_str!("../../../frontend/dist/app.css");
+const SCRIPT: &str = include_str!(concat!(env!("OUT_DIR"), "/webpc/app.js"));
+const CSS: &str = include_str!(concat!(env!("OUT_DIR"), "/webpc/app.css"));
 
 fn asset(body: &str, content_type: &'static str) -> Reply {
     Reply {

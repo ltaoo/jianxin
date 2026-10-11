@@ -2,7 +2,7 @@
 """Small deterministic project generator; no XcodeGen/Ruby dependency."""
 from pathlib import Path
 import hashlib
-root=Path(__file__).resolve().parents[1]/'ios'
+root=Path(__file__).resolve().parents[2]/'ios'
 def uid(value): return hashlib.sha256(value.encode()).hexdigest()[:24].upper()
 files=sorted((root/'Jianxin').glob('*.swift'))
 objects=[]
