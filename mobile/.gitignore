@@ -1,0 +1,9 @@
+android/.gradle/
+android/.kotlin/
+android/**/build/
+android/local.properties
+ios/build/
+ios/**/xcuserdata/
+artifacts/
+*.xcresult
+**/__pycache__/

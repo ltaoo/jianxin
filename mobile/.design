@@ -1,0 +1,72 @@
+{
+  "schema": "design.v1",
+  "name": "jianxin-native-mail",
+  "version": "1.3.0",
+  "extends": "../frontend/.design",
+  "updated_at": "2026-10-11",
+  "agent": {
+    "skill": "design",
+    "instructions": "Use the existing Jianxin color, typography and spacing tokens in native SwiftUI and Android views. Generate platform constants with tools/generate_theme.py. Never invoke or automate a browser. Keep real direct IMAP/SMTP data, native text readers, 44pt/48dp targets and loading/empty/retry states."
+  },
+  "intent": {
+    "direction": "Independent compact native mailbox clients; single-pane phone reading and native navigation.",
+    "signature": "Blue mail actions, restrained sender initials and clearly separated local drafts and send outcomes.",
+    "treatment": "utilitarian"
+  },
+  "constraints": {
+    "always": [
+      "Direct native IMAP/SMTP over verified TLS or STARTTLS.",
+      "Keep credentials in Keychain/Android Keystore and email files in protected application storage.",
+      "Render email as native selectable text; no remote images or script execution.",
+      "Chinese labels, scalable system fonts and at least 44pt/48dp touch targets.",
+      "Explicit confirmation before deleting mail, removing accounts or retrying unknown delivery."
+    ],
+    "never": [
+      "Rust libraries or remote Jianxin engine dependency.",
+      "WebView or browser automation.",
+      "Mock inbox or nonfunctional actions.",
+      "Silent resend after uncertain SMTP acceptance.",
+      "External fonts or runtime CDN UI assets."
+    ]
+  },
+  "themes": {
+    "single": "light"
+  },
+  "components": {
+    "NativeMailbox": {
+      "when": "Folder selection and virtualized message list with offline cache",
+      "tokens": "tokens.color, tokens.spacing, tokens.type"
+    },
+    "NativeComposer": {
+      "when": "New mail, reply, reply all, forward, local draft and attachment picker",
+      "tokens": "tokens.color.primary, tokens.layout.target"
+    },
+    "DeliveryQueue": {
+      "when": "Local persistent sent/failed/uncertain outcomes with explicit retry",
+      "tokens": "tokens.color.danger, tokens.color.success"
+    },
+    "NativeCredentialEntry": {
+      "when": "Mailbox credentials via system Password AutoFill; Android explicit native autofill request; commit after verified login, cancel on explicit exit; no password-vault SDK",
+      "tokens": "tokens.color.primary, tokens.color.muted, tokens.type.caption, tokens.layout.target"
+    },
+    "EncryptedConfigImport": {
+      "when": "Account screen imports HTTPS pure Base64 ciphertext with explicit native AES-256-GCM/AES-128-GCM selector and transient password, or explicitly selected legacy JSON compatibility. No automatic algorithm detection. Preview selectable accounts and preserve existing mail; reuse native form loading/error/retry states.",
+      "tokens": "tokens.color.primary, tokens.color.muted, tokens.color.warning, tokens.type.caption, tokens.layout.target, tokens.spacing"
+    }
+  },
+  "omitted": [
+    "Web interfaces",
+    "sound",
+    "HTML layout rendering"
+  ],
+  "sources": [
+    {
+      "path": "../frontend/.design",
+      "purpose": "Existing Jianxin visual contract"
+    },
+    {
+      "path": "../crates/jianxin-config/src/presets.rs",
+      "purpose": "Existing mailbox endpoints; protocol code is implemented independently"
+    }
+  ]
+}

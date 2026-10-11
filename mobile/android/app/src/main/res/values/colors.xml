@@ -1,0 +1,4 @@
+<resources>
+    <color name="mail_primary">#0066ff</color>
+    <color name="mail_primaryForeground">#ffffff</color>
+</resources>

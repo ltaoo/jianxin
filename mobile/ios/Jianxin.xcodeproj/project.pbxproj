@@ -1,0 +1,60 @@
+// !$*UTF8*$!
+{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
+8D627921F2C1594120298256 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConfigEncryption.swift"; sourceTree = "<group>"; };
+5273DE4DC466BE2F5D14B95B = { isa = PBXBuildFile; fileRef = 8D627921F2C1594120298256; };
+E0AEA384C5AA272B9FE0A57F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConfigImportView.swift"; sourceTree = "<group>"; };
+A274748EC809CB662F1D5475 = { isa = PBXBuildFile; fileRef = E0AEA384C5AA272B9FE0A57F; };
+411C73FA14DDB91270783A10 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "IMAPClient.swift"; sourceTree = "<group>"; };
+2D0C57E8756B6909278AA5A1 = { isa = PBXBuildFile; fileRef = 411C73FA14DDB91270783A10; };
+F1BC47AAA6CF48574974F0B5 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "JianxinApp.swift"; sourceTree = "<group>"; };
+3D16F4A2186AD826678382CB = { isa = PBXBuildFile; fileRef = F1BC47AAA6CF48574974F0B5; };
+9A0750D355E7304ED5CAE677 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MIME.swift"; sourceTree = "<group>"; };
+896E0F4AEC219498A97314A5 = { isa = PBXBuildFile; fileRef = 9A0750D355E7304ED5CAE677; };
+77EA9D84AFFB461260557B1D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MailStore.swift"; sourceTree = "<group>"; };
+C11F6CE6BC542C9AE6C6D592 = { isa = PBXBuildFile; fileRef = 77EA9D84AFFB461260557B1D; };
+9919667C8073F052B0A92EB9 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MailTheme.swift"; sourceTree = "<group>"; };
+007157CC8CDE1FA12BCEF009 = { isa = PBXBuildFile; fileRef = 9919667C8073F052B0A92EB9; };
+BE26416832C4595F0973D52D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models.swift"; sourceTree = "<group>"; };
+FD825685184AF3166D56C1B1 = { isa = PBXBuildFile; fileRef = BE26416832C4595F0973D52D; };
+27C5E4A3B16664512296D2F3 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Persistence.swift"; sourceTree = "<group>"; };
+324BC87DB2FE7692A7E8299B = { isa = PBXBuildFile; fileRef = 27C5E4A3B16664512296D2F3; };
+05354E347650A535FA5B3111 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RemoteConfig.swift"; sourceTree = "<group>"; };
+C2B941AFDCEE3FDBB6492FE1 = { isa = PBXBuildFile; fileRef = 05354E347650A535FA5B3111; };
+8BD66DFFF5B69E5DE845713D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SMTPClient.swift"; sourceTree = "<group>"; };
+DDDF474C373E2E10F1911DD6 = { isa = PBXBuildFile; fileRef = 8BD66DFFF5B69E5DE845713D; };
+4D1B329AE0AA26BD720FC62C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TLSSocket.swift"; sourceTree = "<group>"; };
+304E344F22C7D1DCE270D127 = { isa = PBXBuildFile; fileRef = 4D1B329AE0AA26BD720FC62C; };
+C841134A586B80CCA802B428 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views.swift"; sourceTree = "<group>"; };
+0D99D4DB6ACD79E97AF4824E = { isa = PBXBuildFile; fileRef = C841134A586B80CCA802B428; };
+DD43122484ED8689D7C2A34C = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+F2687002D4A70A82C8684105 = { isa = PBXBuildFile; fileRef = DD43122484ED8689D7C2A34C; };
+A8792157CB4F27FB949C035F = { isa = PBXFileReference; explicitFileType = wrapper.application; path = Jianxin.app; sourceTree = BUILT_PRODUCTS_DIR; };
+F810A3947224DC074E90BB0D = { isa = PBXGroup; path = Jianxin; sourceTree = "<group>"; children = (8D627921F2C1594120298256,E0AEA384C5AA272B9FE0A57F,411C73FA14DDB91270783A10,F1BC47AAA6CF48574974F0B5,9A0750D355E7304ED5CAE677,77EA9D84AFFB461260557B1D,9919667C8073F052B0A92EB9,BE26416832C4595F0973D52D,27C5E4A3B16664512296D2F3,05354E347650A535FA5B3111,8BD66DFFF5B69E5DE845713D,4D1B329AE0AA26BD720FC62C,C841134A586B80CCA802B428,DD43122484ED8689D7C2A34C); };
+0A3E27B8CA818264D75C8D81 = { isa = PBXGroup; name = Products; sourceTree = "<group>"; children = (A8792157CB4F27FB949C035F); };
+C8D2DC745BFC63C0D67231CE = { isa = PBXGroup; sourceTree = "<group>"; children = (F810A3947224DC074E90BB0D,0A3E27B8CA818264D75C8D81); };
+878A52FC5FF6A57D50B7B870 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (5273DE4DC466BE2F5D14B95B,A274748EC809CB662F1D5475,2D0C57E8756B6909278AA5A1,3D16F4A2186AD826678382CB,896E0F4AEC219498A97314A5,C11F6CE6BC542C9AE6C6D592,007157CC8CDE1FA12BCEF009,FD825685184AF3166D56C1B1,324BC87DB2FE7692A7E8299B,C2B941AFDCEE3FDBB6492FE1,DDDF474C373E2E10F1911DD6,304E344F22C7D1DCE270D127,0D99D4DB6ACD79E97AF4824E); runOnlyForDeploymentPostprocessing = 0; };
+E2AA269EB967A8853A258BFA = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+41D311A605520FC7B8B9A980 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (F2687002D4A70A82C8684105); runOnlyForDeploymentPostprocessing = 0; };
+2B23A31EEC75B029432F2445 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; CLANG_ENABLE_MODULES = YES; }; };
+EDDA600A3F771F810A8065C9 = { isa = XCBuildConfiguration; name = Debug; buildSettings = {
+    ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; PRODUCT_BUNDLE_IDENTIFIER = com.jianxin.mail; PRODUCT_NAME = Jianxin; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";
+    GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = "简信"; INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+    INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+    INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+    CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; CODE_SIGN_STYLE = Automatic;
+    SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+    }; };
+07CA1E69F6068DEA30A4DA6B = { isa = XCBuildConfiguration; name = Release; buildSettings = { SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; CLANG_ENABLE_MODULES = YES; }; };
+594BCDCC96599D88EF772A08 = { isa = XCBuildConfiguration; name = Release; buildSettings = {
+    ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; PRODUCT_BUNDLE_IDENTIFIER = com.jianxin.mail; PRODUCT_NAME = Jianxin; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";
+    GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = "简信"; INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+    INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+    INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+    CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; CODE_SIGN_STYLE = Automatic;
+    SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_OPTIMIZATION_LEVEL = "-Osize"; DEAD_CODE_STRIPPING = YES; STRIP_INSTALLED_PRODUCT = YES;
+    }; };
+1922B098E983995960BE56B0 = { isa = XCConfigurationList; buildConfigurations = (2B23A31EEC75B029432F2445,07CA1E69F6068DEA30A4DA6B); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+6FA5FFADD6E6A4C127CEE419 = { isa = XCConfigurationList; buildConfigurations = (EDDA600A3F771F810A8065C9,594BCDCC96599D88EF772A08); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+34A04005BCAF206EEC990BD9 = { isa = PBXNativeTarget; name = Jianxin; productName = Jianxin; productType = "com.apple.product-type.application"; productReference = A8792157CB4F27FB949C035F; buildConfigurationList = 6FA5FFADD6E6A4C127CEE419; buildPhases = (878A52FC5FF6A57D50B7B870,E2AA269EB967A8853A258BFA,41D311A605520FC7B8B9A980); buildRules = (); dependencies = (); };
+244210E48437B6556980A702 = { isa = PBXProject; attributes = { LastUpgradeCheck = 1620; }; buildConfigurationList = 1922B098E983995960BE56B0; compatibilityVersion = "Xcode 14.0"; developmentRegion = "zh-Hans"; knownRegions = ("zh-Hans",en,Base); mainGroup = C8D2DC745BFC63C0D67231CE; productRefGroup = 0A3E27B8CA818264D75C8D81; projectDirPath = ""; projectRoot = ""; targets = (34A04005BCAF206EEC990BD9); };
+}; rootObject = 244210E48437B6556980A702; }

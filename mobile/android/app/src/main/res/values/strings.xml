@@ -1,0 +1,6 @@
+<resources>
+<string name="use_oauth">使用已有 OAuth 访问令牌</string><string name="imap_starttls">IMAP STARTTLS（通常 143）</string><string name="smtp_starttls">SMTP STARTTLS（通常 587）</string>
+<string name="mail_sender">%1$s%2$s%3$s</string><string name="imap_default_port">993</string><string name="smtp_default_port">465</string>
+<string name="config_account_preview">%1$s\n%2$s\nIMAP：%3$s:%4$d\nSMTP：%5$s:%6$d\n%7$s</string>
+<string name="config_update_account">更新已有账号</string><string name="config_new_account">新增账号</string>
+</resources>
