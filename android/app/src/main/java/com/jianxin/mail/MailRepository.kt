@@ -45,7 +45,7 @@ class MailRepository(context: Context) {
         synchronized(cacheLock(id)) {
             val keys = disk.read("keys:$id")?.let(::JSONArray) ?: JSONArray()
             (0 until keys.length()).forEach { disk.remove(keys.getString(it)) }
-            disk.remove("keys:$id"); disk.remove("folders:$id")
+            disk.remove("keys:$id"); disk.remove("folders:$id"); disk.remove("sync-logs:$id")
         }
         folderCache.remove(id)
     }
@@ -89,7 +89,22 @@ class MailRepository(context: Context) {
         return known.firstOrNull { it.path == override || it.name == override }?.path ?: known.firstOrNull { it.role == "inbox" }?.path ?: override ?: "INBOX"
     }
     fun cachedInbox(id: String, query: String, unread: Boolean) = cachedList(listKey(id,inboxPath(id),query,unread))
-    fun inboxBatch(id: String, query: String, unread: Boolean, offset: Int, cancelled: () -> Boolean = { false }): InboxBatch {
+    fun syncLogs(id: String): List<MailSyncLog> = synchronized(cacheLock(id)) {
+        account(id)
+        (disk.read("sync-logs:$id")?.let(::JSONArray) ?: JSONArray()).items(MailSyncLog::parse)
+    }
+    internal fun recordSyncLog(id: String, entry: MailSyncLog) = synchronized(cacheLock(id)) {
+        if (accounts.none { it.id == id }) return@synchronized
+        val history = (disk.read("sync-logs:$id")?.let(::JSONArray) ?: JSONArray()).items(MailSyncLog::parse)
+        disk.write("sync-logs:$id",jsonArray((listOf(entry) + history.take(MailSyncLog.RETENTION - 1)).map { it.json() }).toString())
+    }
+    private fun <T> receive(id: String, operation: String, work: () -> T): T = MailSyncLog.receive(operation,{ entry ->
+        // Log storage must not change a completed IMAP operation's outcome.
+        try { recordSyncLog(id,entry) } catch (error: Exception) { android.util.Log.e("Jianxin","收信日志保存失败：${error.javaClass.simpleName}") }
+    },work)
+    fun inboxBatch(id: String, query: String, unread: Boolean, offset: Int, cancelled: () -> Boolean = { false }): InboxBatch =
+        if (offset == 0) receive(id,"收信") { loadInboxBatch(id,query,unread,offset,cancelled) } else loadInboxBatch(id,query,unread,offset,cancelled)
+    private fun loadInboxBatch(id: String, query: String, unread: Boolean, offset: Int, cancelled: () -> Boolean): InboxBatch {
         if (account(id).needsAuthorization) throw OAuthLoginRequired()
         return ImapClient(connectionAccount(id)).use { client ->
             if (offset == 0) {
@@ -106,8 +121,8 @@ class MailRepository(context: Context) {
             InboxBatch(result.first,result.second)
         }
     }
-    fun folders(id: String): List<Folder> {
-        val result = ImapClient(connectionAccount(id)).use { it.folders() }; cacheFolders(id,result); return result
+    fun folders(id: String): List<Folder> = receive(id,"刷新文件夹") {
+        val result = ImapClient(connectionAccount(id)).use { it.folders() }; cacheFolders(id,result); result
     }
     fun listKey(id: String, folder: String, query: String, unread: Boolean) = "list:$id:$folder:$query:$unread"
     fun cachedList(key: String) = (disk.read(key)?.let(::JSONArray) ?: JSONArray()).items(Message::parse)
@@ -119,7 +134,9 @@ class MailRepository(context: Context) {
         val keys = (0 until old.length()).map { old.getString(it) }.toMutableSet()
         if (keys.add(key)) disk.write("keys:$id",JSONArray(keys.toList()).toString())
     }
-    fun page(id: String, folder: String, query: String, unread: Boolean, offset: Int) = ImapClient(connectionAccount(id)).use { it.page(folder, query, unread, offset) }
+    fun page(id: String, folder: String, query: String, unread: Boolean, offset: Int): Pair<List<Message>,Boolean> =
+        if (offset == 0) receive(id,"收信") { ImapClient(connectionAccount(id)).use { it.page(folder,query,unread,offset) } }
+        else ImapClient(connectionAccount(id)).use { it.page(folder,query,unread,offset) }
     fun cacheList(id: String, key: String, list: List<Message>) { cache(id,key,jsonArray(list.map { it.headerOnly().json() }).toString()) }
     fun updateCachedMessage(key: String, flags: Message, removed: Boolean, unread: Boolean) = synchronized(cacheLock(flags.accountId)) {
         val cached = cachedList(key).map { if (it.id == flags.id) it.copy(isRead = flags.isRead,isStarred = flags.isStarred,date = flags.date) else it }

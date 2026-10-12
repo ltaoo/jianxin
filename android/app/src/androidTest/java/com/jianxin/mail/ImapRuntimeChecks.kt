@@ -9,7 +9,7 @@ import java.util.ArrayDeque
 class ImapRuntimeChecks : Instrumentation() {
     override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); start() }
     override fun onStart() {
-        val checks = listOf("literalMarkers" to ::literalMarkers,"loginAndListFolders" to ::loginAndListFolders,"fetchHeaderLiteral" to ::fetchHeaderLiteral,"threadGroupingAndReply" to ::threadGroupingAndReply,"mailDateFallback" to ::mailDateFallback,"cancelStalledRead" to ::cancelStalledRead,"concurrentSecureStorage" to ::concurrentSecureStorage,"folderCountsWithoutExtraRequest" to ::folderCountsWithoutExtraRequest)
+        val checks = listOf("literalMarkers" to ::literalMarkers,"loginAndListFolders" to ::loginAndListFolders,"fetchHeaderLiteral" to ::fetchHeaderLiteral,"threadGroupingAndReply" to ::threadGroupingAndReply,"mailDateFallback" to ::mailDateFallback,"cancelStalledRead" to ::cancelStalledRead,"concurrentSecureStorage" to ::concurrentSecureStorage,"folderCountsWithoutExtraRequest" to ::folderCountsWithoutExtraRequest,"syncLogStorage" to ::syncLogStorage)
         var failures = 0
         checks.forEachIndexed { index,(name,run) ->
             val report = Bundle().apply {
@@ -60,6 +60,40 @@ class ImapRuntimeChecks : Instrumentation() {
             tasks.forEach { it.get(10,java.util.concurrent.TimeUnit.SECONDS) }
             check(store.read(key) in values)
         } finally { pool.shutdownNow(); store.remove(key) }
+    }
+    private fun syncLogStorage() {
+        val directory = java.io.File(targetContext.cacheDir,"sync-log-check:${java.util.UUID.randomUUID()}").apply { mkdirs() }
+        val context = object : android.content.ContextWrapper(targetContext) {
+            override fun getApplicationContext(): android.content.Context = this
+            override fun getNoBackupFilesDir(): java.io.File = directory
+        }
+        try {
+            val store = SecureStore(context)
+            val repository = MailRepository(context)
+            val first = account(); val second = account().copy(id = java.util.UUID.randomUUID().toString(),email = "another@example.com")
+            val pending = account().copy(email = "pending@example.com",credential = "",oauth2 = true)
+            repository.importAccounts(listOf(first,second,pending))
+            check(repository.syncLogs(first.id).isEmpty())
+            val reads = listOf<() -> Unit>({ repository.inboxBatch(pending.id,"",false,0) },{ repository.page(pending.id,"INBOX","",false,0) },{ repository.folders(pending.id) })
+            reads.forEach { read -> try { read(); error("Expected authorization failure") } catch (_: OAuthLoginRequired) { } }
+            check(repository.syncLogs(pending.id).size == 3 && repository.syncLogs(pending.id).all { it.result == MailSyncResult.AUTH_REQUIRED })
+            try { repository.page(pending.id,"INBOX","",false,30); error("Expected authorization failure") } catch (_: OAuthLoginRequired) { }
+            check(repository.syncLogs(pending.id).size == 3)
+            val history = (1..MailSyncLog.RETENTION).reversed().map { MailSyncLog(it.toLong(),"收信",MailSyncResult.SUCCESS) }
+            store.write("sync-logs:${first.id}",jsonArray(history.map { it.json() }).toString())
+            val failed = MailSyncLog(1001,"收信",MailSyncResult.NETWORK_FAILED)
+            repository.recordSyncLog(first.id,failed)
+            repository.recordSyncLog(second.id,MailSyncLog(1002,"刷新文件夹",MailSyncResult.SUCCESS))
+            val restored = MailRepository(context)
+            check(restored.syncLogs(first.id).size == MailSyncLog.RETENTION)
+            check(restored.syncLogs(first.id).first() == failed && restored.syncLogs(first.id).last().completedAt == 2L)
+            check(restored.syncLogs(second.id).single().completedAt == 1002L)
+            restored.removeAccount(first.id)
+            check(store.read("sync-logs:${first.id}") == null)
+            restored.recordSyncLog(first.id,failed)
+            check(store.read("sync-logs:${first.id}") == null)
+            check(restored.syncLogs(second.id).size == 1)
+        } finally { directory.deleteRecursively() }
     }
     private fun folderCountsWithoutExtraRequest() {
         val wire = RuntimeWire(listOf("* OK hello","J0001 OK login","* CAPABILITY IMAP4rev1 LIST-STATUS","J0002 OK cap",

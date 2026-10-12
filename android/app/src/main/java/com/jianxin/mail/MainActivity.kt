@@ -278,6 +278,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         item("刷新文件夹",R.drawable.ic_refresh) { loadAccountFolders(current) }.isEnabled = !current.needsAuthorization
+        item("收信日志",R.drawable.ic_mail) { showSyncLogs(current) }
         val problem = mailboxProblem(current)
         if (problem.isNotBlank()) popup.menu.add("邮箱状态：$problem").apply {
             icon = AppCompatResources.getDrawable(this@MainActivity,R.drawable.ic_error)?.mutate()?.apply { setTint(if (current.needsAuthorization) MailTheme.warning else MailTheme.danger) }
@@ -731,6 +732,27 @@ class MainActivity : AppCompatActivity() {
         if (attachment.data == null) { toast("附件尚未下载，重新读取邮件后重试"); return }
         attachmentExport = attachment
         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = attachment.mimeType; putExtra(Intent.EXTRA_TITLE,attachment.filename.substringAfterLast('/').substringAfterLast('\\')) },EXPORT)
+    }
+    private fun showSyncLogs(account: MailAccount) {
+        page("收信日志","sync-logs")
+        toolbar.subtitle = account.email
+        toolbarAction("刷新日志",R.drawable.ic_refresh) { showSyncLogs(account) }
+        content.addView(text("记录本机收信和文件夹刷新完成的时间及结果，最新记录在前，每个邮箱保留最近 ${MailSyncLog.RETENTION} 条。",13f,MailTheme.muted).apply { tag = "sync-logs-description" })
+        val list = ListView(this).apply { tag = "sync-logs-list"; contentDescription = "${account.email} 收信日志"; divider = null }
+        content.addView(list,LinearLayout.LayoutParams(-1,0,1f))
+        io({ repository.syncLogs(account.id) },failure = { status("收信日志加载失败，请点击刷新日志重试") }) { logs ->
+            if (logs.isEmpty()) status("暂无收信记录，此邮箱完成收信后会显示在这里。")
+            list.adapter = object : ArrayAdapter<MailSyncLog>(this,android.R.layout.simple_list_item_2,android.R.id.text1,logs) {
+                override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                    val entry = getItem(position)!!
+                    return super.getView(position,convertView,parent).apply {
+                        tag = "sync-log-entry"; minimumHeight = dp(72)
+                        findViewById<TextView>(android.R.id.text1).apply { tag = "sync-log-time"; text = MailTime.format(entry.completedAt,"yyyy-MM-dd HH:mm:ss"); setTextColor(MailTheme.text) }
+                        findViewById<TextView>(android.R.id.text2).apply { tag = "sync-log-result"; text = "${entry.operation} · ${entry.result.label}"; setTextColor(if (entry.result == MailSyncResult.SUCCESS) MailTheme.success else MailTheme.danger) }
+                    }
+                }
+            }
+        }
     }
     private fun showDrafts() {
         page("本地草稿","drafts")
