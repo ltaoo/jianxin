@@ -23,6 +23,46 @@ fn read_json(reader: &mut dyn Read) -> Result<Value> {
     serde_json::from_slice(&bytes).context("配置内容不是有效 JSON")
 }
 
+pub(super) fn presets() -> Reply {
+    let providers: Vec<_> = [
+        ("qq", "QQ", "qq.com"),
+        ("netease163", "163", "163.com"),
+        ("netease126", "126", "126.com"),
+        ("gmail", "Gmail", "gmail.com"),
+        ("outlook", "Outlook", "outlook.com"),
+        ("aliyun", "阿里云", "aliyun.com"),
+    ]
+    .into_iter()
+    .map(|(key, name, domain)| {
+        let preset = jianxin_config::presets::detect(&format!("mail@{domain}")).unwrap();
+        json!({"key": key, "name": name, "platform": key, "provider": preset.provider,
+            "imap": preset.imap, "smtp": preset.smtp})
+    })
+    .chain(std::iter::once(
+        json!({"key":"custom", "name":"其他邮箱", "provider":"generic-imap"}),
+    ))
+    .collect();
+    Reply::json(200, json!({"providers": providers}))
+}
+
+fn valid_account(account: &AccountConfig) -> bool {
+    let Some((local, domain)) = account.email.split_once('@') else {
+        return false;
+    };
+    account.validate().is_ok()
+        && !local.is_empty()
+        && !domain.is_empty()
+        && !domain.contains('@')
+        && !account.email.chars().any(char::is_whitespace)
+        && [account.imap_server(), account.smtp_server()]
+            .iter()
+            .all(|server| {
+                server.port > 0
+                    && !server.host.chars().any(char::is_whitespace)
+                    && ammonia::url::Host::parse(&server.host).is_ok()
+            })
+}
+
 fn parsed_accounts(value: &Value) -> Result<Vec<(usize, AccountConfig)>> {
     let rows = value
         .get("accounts")
@@ -36,7 +76,7 @@ fn parsed_accounts(value: &Value) -> Result<Vec<(usize, AccountConfig)>> {
     for (index, row) in rows.iter().enumerate() {
         if let Ok(mut account) = serde_json::from_value::<AccountConfig>(row.clone()) {
             account.apply_oauth_defaults();
-            if account.validate().is_ok() && seen.insert(account.to_account().id) {
+            if valid_account(&account) && seen.insert(account.to_account().id) {
                 accounts.push((index, account));
             }
         }
@@ -51,6 +91,32 @@ pub(super) fn preview(app: &App, reader: &mut dyn Read) -> Reply {
     let result = (|| -> Result<Value> {
         let value = read_json(reader)?;
         let accounts = parsed_accounts(&value)?;
+        let verify = value["verify_connection"].as_bool().unwrap_or(false);
+        if verify {
+            if value["accounts"].as_array().unwrap().len() != 1 {
+                bail!("每次只能验证一个邮箱");
+            }
+            let auth = &value["accounts"][0]["auth"];
+            if auth.get("token_command").is_some()
+                || auth.get("refresh_token").is_some()
+                || auth
+                    .as_object()
+                    .is_some_and(|fields| fields.values().any(Value::is_object))
+            {
+                bail!("手动验证只支持直接填写密码、授权码或访问令牌");
+            }
+            let account = &accounts[0].1;
+            if !account.needs_authorization() {
+                jianxin_provider::ProviderRegistry::builtin()
+                    .build(account, app.sync_config())
+                    .and_then(|provider| provider.test_connection())
+                    .map_err(|_| {
+                        anyhow::anyhow!(
+                            "邮箱连接验证失败，请检查服务器地址、TLS 设置和密码 / 客户端授权码"
+                        )
+                    })?;
+            }
+        }
         let mut warnings = Vec::new();
         let count = value["accounts"].as_array().unwrap().len();
         for index in 0..count {
@@ -73,6 +139,7 @@ pub(super) fn preview(app: &App, reader: &mut dyn Read) -> Reply {
             "index": index, "email": account.email, "name": account.display_name,
             "existing": app.account_configs().iter().any(|old| old.to_account().id == account.to_account().id),
             "needs_authorization": account.needs_authorization(),
+            "connection_verified": verify && !account.needs_authorization(),
         })).collect();
         Ok(json!({"accounts": rows, "warnings": warnings}))
     })();
@@ -239,6 +306,120 @@ fn reply(result: Result<Value>) -> Reply {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manual_presets_use_shared_endpoints_and_invalid_servers_are_rejected() {
+        let response = presets();
+        let result: Value = serde_json::from_str(&response.body).unwrap();
+        assert_eq!(result["providers"].as_array().unwrap().len(), 7);
+        let outlook = result["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["key"] == "outlook")
+            .unwrap();
+        let shared = jianxin_config::presets::detect("person@outlook.com").unwrap();
+        assert_eq!(outlook["imap"], serde_json::to_value(shared.imap).unwrap());
+        assert_eq!(outlook["smtp"], serde_json::to_value(shared.smtp).unwrap());
+        let value = json!({"accounts":[{"email":"person@example.com", "auth":{"type":"app_password","password":"secret"},
+            "imap":{"host":"imap.example.com","port":993},"smtp":{"host":"smtp.example.com","port":465}}]});
+        assert!(parsed_accounts(&value).is_ok());
+        for (field, invalid) in [
+            ("email", json!("@example.com")),
+            ("email", json!("a@@example.com")),
+            ("email", json!("a b@example.com")),
+            ("imap", json!({"host":"", "port":993})),
+            ("smtp", json!({"host":"smtp.example.com", "port":0})),
+            (
+                "imap",
+                json!({"host":"https://imap.example.com", "port":993}),
+            ),
+        ] {
+            let mut malformed = value.clone();
+            malformed["accounts"][0][field] = invalid;
+            assert!(parsed_accounts(&malformed).is_err());
+        }
+    }
+
+    #[test]
+    fn manual_preview_never_resolves_credential_commands_or_secret_references() {
+        let app = App::with_database(
+            jianxin_config::AppConfig::default(),
+            jianxin_store::Database::open_in_memory().unwrap(),
+        )
+        .unwrap();
+        for auth in [
+            json!({"type":"app_password","password":{"command":"do-not-execute"}}),
+            json!({"type":"app_password","password":{"file":"/do-not-read"}}),
+            json!({"type":"oauth2","token_command":"do-not-execute"}),
+        ] {
+            let value = json!({"verify_connection":true,"accounts":[{"email":"person@example.com","auth":auth}]});
+            let response = preview(&app, &mut value.to_string().as_bytes());
+            assert_eq!(response.status, 400);
+            assert!(response.body.contains("只支持直接填写"));
+            assert!(!response.body.contains("do-not-"));
+            let mixed = json!({"verify_connection":true,"accounts":[{},value["accounts"][0]]});
+            let response = preview(&app, &mut mixed.to_string().as_bytes());
+            assert_eq!(response.status, 400);
+            assert!(response.body.contains("每次只能验证一个邮箱"));
+        }
+    }
+
+    #[test]
+    fn manual_connection_preview_verifies_imap_without_saving_or_exposing_credentials() {
+        use std::io::{BufRead, BufReader, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream.write_all(b"* OK IMAP4rev1 ready\r\n").unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap() != 0 {
+                let parts: Vec<_> = line.split_whitespace().collect();
+                let tag = parts[0];
+                match parts[1].to_ascii_uppercase().as_str() {
+                    "CAPABILITY" => stream.write_all(b"* CAPABILITY IMAP4rev1\r\n").unwrap(),
+                    "LIST" => stream.write_all(b"* LIST () \"/\" \"INBOX\"\r\n").unwrap(),
+                    "LOGOUT" => {
+                        write!(stream, "* BYE\r\n{tag} OK done\r\n").unwrap();
+                        break;
+                    }
+                    _ => {}
+                }
+                write!(stream, "{tag} OK done\r\n").unwrap();
+                line.clear();
+            }
+        });
+        let app = App::with_database(
+            jianxin_config::AppConfig::default(),
+            jianxin_store::Database::open_in_memory().unwrap(),
+        )
+        .unwrap();
+        let value = json!({"verify_connection":true,"accounts":[{"email":"person@example.com",
+            "auth":{"type":"app_password","password":"private-password"},
+            "imap":{"host":"127.0.0.1","port":port,"tls":"none"},"smtp":{"host":"smtp.example.com","port":465}}]});
+        let response = preview(&app, &mut value.to_string().as_bytes());
+        server.join().unwrap();
+        assert_eq!(response.status, 200, "{}", response.body);
+        assert!(app.account_configs().is_empty());
+        assert!(!response.body.contains("private-password"));
+        let rows: Value = serde_json::from_str(&response.body).unwrap();
+        assert_eq!(rows["accounts"][0]["connection_verified"], true);
+        let response = preview(&app, &mut value.to_string().as_bytes());
+        assert_eq!(response.status, 400);
+        assert!(!response.body.contains("private-password"));
+        assert!(app.account_configs().is_empty());
+        let pending = json!({"verify_connection":true,"accounts":[{"email":"pending@outlook.com","auth":{"type":"oauth2"}}]});
+        let response = preview(&app, &mut pending.to_string().as_bytes());
+        assert_eq!(response.status, 200);
+        let rows: Value = serde_json::from_str(&response.body).unwrap();
+        assert_eq!(rows["accounts"][0]["connection_verified"], false);
+        assert_eq!(rows["accounts"][0]["needs_authorization"], true);
+    }
     #[test]
     fn url_validation_and_bounded_input() {
         assert!(validated_url("https://example.com/config.enc?v=1").is_ok());

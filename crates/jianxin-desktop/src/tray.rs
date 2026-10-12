@@ -162,11 +162,12 @@ impl NativeTray {
             },
         ));
         let (menu, actions) = Self::menu(entries)?;
-        let image = image::load_from_memory_with_format(
-            include_bytes!("../../../assets/jianxin-tray.png"),
-            image::ImageFormat::Png,
-        )?
-        .into_rgba8();
+        #[cfg(target_os = "macos")]
+        let icon_bytes = include_bytes!("../../../assets/jianxin-tray-template.png").as_slice();
+        #[cfg(target_os = "windows")]
+        let icon_bytes = include_bytes!("../../../assets/jianxin-tray.png").as_slice();
+        let image = image::load_from_memory_with_format(icon_bytes, image::ImageFormat::Png)?
+            .into_rgba8();
         let (width, height) = image.dimensions();
         let icon = tray_icon::Icon::from_rgba(image.into_raw(), width, height)?;
         let builder = tray_icon::TrayIconBuilder::new()

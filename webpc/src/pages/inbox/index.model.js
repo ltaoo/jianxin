@@ -140,7 +140,7 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
     notifications,
     reply: ReplyCore({ service, timers, replied() { methods.refresh({ silent: true }); } }),
     configImport: ConfigImportCore({ service, imported() { methods.init(); } }),
-    importMailboxes: control({ label: '导入邮箱配置' }, { click() { ui.configImport.open(); } }),
+    importMailboxes: control({ label: '添加邮箱' }, { click() { ui.configImport.open(); } }),
     search: control({ value: state.query.value }, { input() {},
       keydown(event) { if (event.key === 'Enter') { event.preventDefault(); methods.search(); } if (event.key === 'Escape') { state.query.as(''); ui.search.set({ value: '' }); methods.search(); } } }),
     searchButton: control({ label: '搜索邮件' }, { click() { methods.search(); } }),

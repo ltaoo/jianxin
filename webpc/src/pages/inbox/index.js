@@ -38,7 +38,7 @@ export function InboxPageView(props) {
   }
   function Sidebar() {
     return Panel({ kind: 'sidebar', as: 'aside', attributes: { 'aria-label': '邮箱导航' } }, [
-      View({ class: 'jx-brand' }, [View({ class: 'jx-brand-mark' }, [Glyph('mail')]), View({ class: 'jx-brand-copy' }, [View({ as: 'strong' }, ['简信']), View({ as: 'span' }, ['JIANXIN · 邮件工作区'])])]),
+      View({ class: 'jx-brand', attributes: { n: 'app-brand' } }, [View({ as: 'img', class: 'jx-brand-mark', attributes: { n: 'app-logo', src: `${props.root}/assets/jianxin-logo.svg`, alt: '简信' } }), View({ class: 'jx-brand-copy', attributes: { n: 'app-brand-copy' } }, [View({ as: 'strong', attributes: { n: 'app-brand-name' } }, ['简信']), View({ as: 'span', attributes: { n: 'app-brand-description' } }, ['JIANXIN · 邮件工作区'])])]),
       View({ as: 'nav', class: 'jx-navigation' }, [
         nav(ui.all, s.folder, value => !s.account.value && !value && !s.unread.value && !s.starred.value, 'all'),
         nav(ui.unread, s.unread, value => !s.account.value && value && !s.starred.value, 'unread'),
@@ -133,5 +133,5 @@ export function InboxPageView(props) {
       View({ class: 'jx-header-caption jx-row jx-muted' }, [Glyph('clock'), '专注于每一封邮件']), NotificationCenter({ store: ui.notifications }), Button({ store: agentToggle, icon: 'agent', variant: 'ghost' }),
     ]),
     View({ class: 'jx-main-row' }, [View({ class: 'jx-split' }, [List(), Show({ when: selected, ok: Reader })]), AgentPanel({ store: agent })]),
-  ]), ReplyWindow({ store: ui.reply }), ConfigImport({ store: ui.configImport })]);
+  ]), ReplyWindow({ store: ui.reply }), ConfigImport({ store: ui.configImport, root: props.root })]);
 }

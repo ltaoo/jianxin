@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  desktop:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            platform: macos-arm64
+            extension: zip
+          - runner: macos-15-intel
+            platform: macos-x86_64
+            extension: zip
+          - runner: windows-2022
+            platform: windows-x86_64
+            extension: zip
+          - runner: ubuntu-24.04
+            platform: linux-x86_64
+            extension: tar.gz
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      ASSET_NAME: jianxin-${{ github.ref_name }}-${{ matrix.platform }}.${{ matrix.extension }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: webpc/package-lock.json
+      - run: npm ci --prefix webpc
+      - run: npm test --prefix webpc
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+      - run: cargo test --locked -p jianxin-desktop -p jianxin-web
+      - name: Build and package macOS app
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${RELEASE_TAG#v}" platform/macos/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" platform/macos/Info.plist
+          bash scripts/build-macos-app.sh
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent target/macos/Jianxin.app "artifacts/$ASSET_NAME"
+      - name: Build and package Windows app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./scripts/build-desktop.ps1
+          New-Item -ItemType Directory -Path artifacts | Out-Null
+          Copy-Item target/release/jianxin-windows.zip "artifacts/$env:ASSET_NAME"
+      - name: Build and package Linux app
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          bash scripts/build-desktop.sh
+          mkdir -p artifacts
+          tar -czf "artifacts/$ASSET_NAME" -C target/release jianxin-desktop
+      - name: Upload release package
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.platform }}
+          path: artifacts/${{ env.ASSET_NAME }}
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+
+  publish:
+    name: Publish GitHub Release
+    needs: desktop
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: artifacts
+      - name: Create release or update its attachments
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" artifacts/* --clobber
+          else
+            gh release create "$RELEASE_TAG" artifacts/* --verify-tag --generate-notes --title "简信 $RELEASE_TAG"
+          fi

@@ -3,6 +3,7 @@ import http.client
 import http.server
 import json
 import pathlib
+import socket
 import subprocess
 import sys
 import tempfile
@@ -65,6 +66,40 @@ with tempfile.TemporaryDirectory(prefix='jianxin-config-import-') as directory:
         accounts = json.loads(connection.getresponse().read())['accounts']
         assert len(accounts) == 2
         connection.close()
+        # The manual form gets the same presets, verifies before saving, and uses the import merger.
+        connection = http.client.HTTPConnection(address.hostname, address.port, timeout=5)
+        connection.request('GET', '/api/config/presets')
+        response = connection.getresponse()
+        assert response.status == 200
+        presets = json.loads(response.read())['providers']
+        connection.close()
+        assert len(presets) == 7
+        outlook = next(row for row in presets if row['key'] == 'outlook')
+        manual = {'accounts': [{'email': 'manual@outlook.com', 'display_name': '手动添加', 'platform': outlook['platform'],
+            'provider': outlook['provider'], 'auth': {'type': 'oauth2'}, 'imap': outlook['imap'], 'smtp': outlook['smtp']}]}
+        before = config.read_bytes()
+        assert request('preview', {**manual, 'verify_connection': True}, marker=False)[0] == 403
+        status, result = request('preview', {**manual, 'verify_connection': True})
+        assert status == 200 and result['accounts'][0]['needs_authorization']
+        assert not result['accounts'][0]['connection_verified'] and config.read_bytes() == before
+        with socket.socket() as closed:
+            closed.bind(('127.0.0.1', 0))
+            failed = {'verify_connection': True, 'accounts': [{'email': 'failed@example.com', 'auth': {'type': 'app_password', 'password': 'private-manual-password'},
+                'imap': {'host': '127.0.0.1', 'port': closed.getsockname()[1], 'tls': 'tls'}, 'smtp': {'host': 'smtp.example.com', 'port': 465}}]}
+            status, error = request('preview', failed)
+            assert status == 400 and 'private-manual-password' not in json.dumps(error)
+        assert config.read_bytes() == before
+        for attempt in range(20):
+            status, result = request('import', manual)
+            if status != 409: break
+            time.sleep(.05)
+        assert status == 200, result
+        saved = json.loads(config.read_text())
+        assert len(saved['accounts']) == 3
+        assert saved['general']['data_dir'] == original['general']['data_dir']
+        assert saved['general']['sync']['timeout_secs'] == original['general']['sync']['timeout_secs']
+        assert request('preview', manual)[1]['accounts'][0]['existing']
+        assert config.stat().st_mode & 0o077 == 0
         # OAuth-only accounts stay in the preview and config before any login.
         pending = {'accounts': [{'email': 'pending@outlook.com', 'auth': {'type': 'oauth2'}}]}
         status, preview = request('preview', pending)
@@ -168,7 +203,7 @@ with tempfile.TemporaryDirectory(prefix='jianxin-config-import-') as directory:
             provider.shutdown()
             provider.server_close()
             provider_thread.join(timeout=3)
-        print('HTTP passed: import, pending OAuth, application settings, explicit device login, refresh-token persistence and live status updates.')
+        print('HTTP passed: presets, manual validation and save, import, pending OAuth, application settings, explicit device login, refresh-token persistence and live status updates.')
     finally:
         process.terminate()
         process.wait(timeout=10)

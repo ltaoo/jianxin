@@ -225,7 +225,7 @@ fn register_identity() -> Result<()> {
     let data = dirs::data_local_dir().context("cannot locate application data directory")?;
     let icon = data.join("jianxin/jianxin.png");
     std::fs::create_dir_all(icon.parent().unwrap())?;
-    std::fs::write(&icon, include_bytes!("../../../assets/jianxin-icon.png"))?;
+    std::fs::write(&icon, include_bytes!("../../../assets/jianxin-notification.png"))?;
     #[cfg(target_os = "windows")]
     {
         let executable = std::env::current_exe()?;

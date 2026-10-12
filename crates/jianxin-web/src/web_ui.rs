@@ -30,6 +30,12 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
     if path == "assets/app.css" {
         return Ok(asset(CSS, "text/css; charset=utf-8"));
     }
+    if path == "assets/jianxin-logo.svg" || path == "assets/favicon.svg" {
+        return Ok(asset(
+            include_str!("../../../assets/jianxin-web.svg"),
+            "image/svg+xml; charset=utf-8",
+        ));
+    }
     if let Some(name) = path.strip_prefix("assets/mail-providers/") {
         let icon = match name {
             "gmail.svg" => include_str!("../../../assets/mail-providers/svg-exact/gmail.svg"),
@@ -55,6 +61,9 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
             _ => bail!("unknown mailbox icon"),
         };
         return Ok(asset(icon, "image/svg+xml; charset=utf-8"));
+    }
+    if path == "api/config/presets" {
+        return Ok(web_config::presets());
     }
     if path == "api/mailboxes" {
         let mut accounts = Vec::new();
@@ -270,7 +279,7 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
         return Ok(Reply {
             status:200, content_type:"text/html; charset=utf-8",
             csp: "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'".into(),
-            body:format!("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>简信 · 邮件</title><link rel=\"stylesheet\" href=\"{root}/assets/app.css\"><script defer src=\"{root}/assets/app.js\"></script></head><body><a class=\"jx-skip\" href=\"#mail-content\">跳到邮件内容</a><div id=\"app\" data-root=\"{root}\"><p class=\"jx-startup\">正在加载本地邮件…</p></div><noscript>请启用 JavaScript 以使用邮件阅读器。</noscript></body></html>")
+            body:format!("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>简信 · 邮件</title><link rel=\"icon\" type=\"image/svg+xml\" href=\"{root}/assets/favicon.svg\" data-n=\"app-favicon\"><link rel=\"stylesheet\" href=\"{root}/assets/app.css\"><script defer src=\"{root}/assets/app.js\"></script></head><body><a class=\"jx-skip\" href=\"#mail-content\">跳到邮件内容</a><div id=\"app\" data-root=\"{root}\"><p class=\"jx-startup\">正在加载本地邮件…</p></div><noscript>请启用 JavaScript 以使用邮件阅读器。</noscript></body></html>")
         });
     }
     bail!("unknown route")
@@ -368,6 +377,7 @@ mod tests {
         ] {
             let shell = render(&app, "/secret", &route).unwrap();
             assert!(shell.body.contains("/secret/assets/app.js"));
+            assert!(shell.body.contains("/secret/assets/favicon.svg"));
             assert!(!shell.body.contains("HTML body"));
             assert!(shell.csp.contains("frame-src 'self'"));
             assert!(shell.csp.contains("img-src 'self'"));
@@ -376,6 +386,11 @@ mod tests {
         assert!(script.body.contains("Timeless"));
         assert_eq!(script.content_type, "text/javascript; charset=utf-8");
         assert!(render(&app, "/secret", "assets/../../config.json").is_err());
+        for path in ["assets/jianxin-logo.svg", "assets/favicon.svg"] {
+            let logo = render(&app, "/secret", path).unwrap();
+            assert_eq!(logo.content_type, "image/svg+xml; charset=utf-8");
+            assert_eq!(logo.body, include_str!("../../../assets/jianxin-web.svg"));
+        }
         for platform in [
             "gmail",
             "outlook",

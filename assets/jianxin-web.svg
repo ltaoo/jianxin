@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" overflow="hidden" role="img" aria-labelledby="01-letter-peek-title 01-letter-peek-desc" data-n="xiaoxun-push-01-letter-peek">
+  <title id="01-letter-peek-title">小讯推送 · 来信探头</title>
+  <desc id="01-letter-peek-desc">浅蓝底上，放大的小讯从一封白色信件后探头，双眼水平，信封裁切到底边，双呆毛向左舒展。</desc>
+  <defs data-n="canvas-definitions"><clipPath id="01-letter-peek-canvas" data-n="canvas-clip"><rect width="512" height="512" data-n="canvas-bounds"/></clipPath></defs>
+  <g clip-path="url(#01-letter-peek-canvas)" data-n="app-icon-artwork">
+  <rect width="512" height="512" fill="#D6E7FC" data-n="full-bleed-background"/>
+  <path fill="#2563EB" data-n="peeking-head-and-two-crest-feathers" d="M211 212C183 207 157 211 135 208C120 208 113 201 113 189C113 175 123 165 137 159C160 149 185 154 207 165C224 174 237 191 246 210C242 178 227 155 199 144C182 138 165 136 147 136C127 136 117 131 112 121C104 107 112 88 130 80C159 67 194 76 219 91C251 110 272 141 279 178C281 191 281 203 278 217C393 230 480 305 512 391V512H0V391C40 291 122 236 211 212Z"/>
+  <g transform="translate(0 -24)" data-n="xiaoxun-face">
+  <path fill="#FFFFFF" data-n="left-comma-cheek" d="M139 291C177 289 203 316 203 353C203 392 165 421 137 421C140 428 148 433 155 437C135 449 109 443 91 425C71 404 74 368 80 347C88 315 113 293 139 291Z"/>
+  <path fill="#FFFFFF" transform="translate(512 0) scale(-1 1)" data-n="right-comma-cheek" d="M139 291C177 289 203 316 203 353C203 392 165 421 137 421C140 428 148 433 155 437C135 449 109 443 91 425C71 404 74 368 80 347C88 315 113 293 139 291Z"/>
+  <circle cx="159" cy="354" r="27" fill="#152D63" data-n="left-eye"/>
+  <circle cx="353" cy="354" r="27" fill="#152D63" data-n="right-eye"/>
+  <path fill="none" stroke="#152D63" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" data-n="curious-eyebrows" d="M130 272Q151 255 173 261M339 261Q361 255 382 272"/>
+  <path fill="#FFFBE9" data-n="ivory-closed-beak" d="M256 364C272 364 302 390 302 403C302 418 274 431 256 433C238 431 210 418 210 403C210 390 240 364 256 364Z"/>
+  </g>
+  <g transform="rotate(0 256 490)" data-n="foreground-letter">
+  <rect x="54" y="413" width="404" height="154" rx="20.02" fill="#FFFFFF" data-n="envelope-body"/>
+  <path fill="none" stroke="#2563EB" stroke-width="14.947999999999999" stroke-linecap="round" stroke-linejoin="round" data-n="envelope-flap" d="M69 432L244 503.86Q256 516.18 268 503.86L443 432"/>
+  </g>
+  </g>
+</svg>

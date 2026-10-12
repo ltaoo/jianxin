@@ -18,9 +18,9 @@ mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources" "$build_dir/Jia
 cp platform/macos/Info.plist "$app_dir/Contents/Info.plist"
 cp target/macos-app/jianxin-desktop "$app_dir/Contents/Resources/jianxin-desktop"
 for size in 16 32 128 256 512; do
-  sips -z "$size" "$size" assets/jianxin-icon.png --out "$build_dir/Jianxin.iconset/icon_${size}x${size}.png" >/dev/null
+  sips -z "$size" "$size" assets/jianxin-macos.png --out "$build_dir/Jianxin.iconset/icon_${size}x${size}.png" >/dev/null
   retina_size=$((size * 2))
-  sips -z "$retina_size" "$retina_size" assets/jianxin-icon.png --out "$build_dir/Jianxin.iconset/icon_${size}x${size}@2x.png" >/dev/null
+  sips -z "$retina_size" "$retina_size" assets/jianxin-macos.png --out "$build_dir/Jianxin.iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$build_dir/Jianxin.iconset" -o "$app_dir/Contents/Resources/Jianxin.icns"
 swiftc -Osize -module-cache-path "$build_dir/module-cache" -framework AppKit -framework UserNotifications \

@@ -132,4 +132,4 @@ service must support actions, and the watcher must still be running to handle th
 Linux runtime behavior must be verified on a Linux desktop.
 
 The third-party backend: https://github.com/hoodie/notify-rust
-The icon source and generation prompt are in `assets/`.
+The [shared SVG icon pipeline](../assets/README.md) supports one-command replacement and per-scene overrides.

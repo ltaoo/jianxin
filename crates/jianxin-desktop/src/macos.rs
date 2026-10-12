@@ -1,8 +1,8 @@
 //! AppKit menu bar artwork and local visibility diagnostics.
 use anyhow::{Context, Result};
 use objc2::MainThreadMarker;
-use objc2_app_kit::{NSCellImagePosition, NSImage};
-use objc2_foundation::{NSCopying, NSSize, NSString};
+use objc2_app_kit::NSCellImagePosition;
+use objc2_foundation::NSSize;
 use tray_icon::TrayIcon;
 
 pub fn configure(tray: &TrayIcon) -> Result<()> {
@@ -14,12 +14,7 @@ pub fn configure(tray: &TrayIcon) -> Result<()> {
     let button = item
         .button(marker)
         .context("menu bar button was not created")?;
-    let symbol = NSImage::imageWithSystemSymbolName_accessibilityDescription(
-        &NSString::from_str("envelope"),
-        Some(&NSString::from_str("简信未读邮件")),
-    )
-    .context("cannot load macOS envelope symbol")?;
-    let symbol = symbol.copy();
+    let symbol = button.image().context("cannot load Jianxin tray artwork")?;
     symbol.setSize(NSSize::new(18.0, 18.0));
     symbol.setTemplate(true);
     button.setImage(Some(&symbol));

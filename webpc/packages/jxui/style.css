@@ -6,6 +6,10 @@
 .jx-import-field{display:flex;flex-direction:column;gap:var(--jx-spacing-2);margin:var(--jx-spacing-4) 0}
 .jx-import-field .jx-input{width:100%;padding:var(--jx-spacing-3);border:var(--jx-border-width) solid var(--jx-color-line);border-radius:var(--jx-radius-control);background:var(--jx-color-canvas)}
 .jx-import-source [aria-pressed=true]{color:var(--jx-color-primary);background:var(--jx-color-selected)}
+.jx-import-source{flex-wrap:wrap}
+.jx-import-providers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--jx-spacing-2)}
+.jx-import-provider{justify-content:flex-start;padding:var(--jx-spacing-3);border:var(--jx-border-width) solid var(--jx-color-line);border-radius:var(--jx-radius-control)}
+.jx-import-provider[aria-pressed=true]{border-color:var(--jx-color-primary);background:var(--jx-color-selected);color:var(--jx-color-primary)}
 .jx-import-file{width:100%;max-width:100%}
 .jx-import-file::file-selector-button{font:inherit;color:var(--jx-color-text);background:var(--jx-color-fill);border:var(--jx-border-width) solid var(--jx-color-line);border-radius:var(--jx-radius-control);padding:var(--jx-spacing-2) var(--jx-spacing-3);margin-right:var(--jx-spacing-3);cursor:pointer}
 .jx-import-preview{border-top:var(--jx-border-width) solid var(--jx-color-line);margin-top:var(--jx-spacing-4);padding-top:var(--jx-spacing-3)}
@@ -122,8 +126,7 @@ h1,h2,p{margin:0}h1{font-size:var(--jx-type-heading);font-weight:600}h2{font-siz
 /* Refined workspace hierarchy and official Timeless icons. */
 .jx-panel--sidebar{padding:var(--jx-spacing-3);background:var(--jx-color-recessed)}
 .jx-brand{gap:var(--jx-spacing-3);padding:var(--jx-spacing-4) var(--jx-spacing-2) var(--jx-spacing-6)}
-.jx-brand-mark{display:flex;align-items:center;justify-content:center;width:var(--jx-layout-target);height:var(--jx-layout-target);border-radius:var(--jx-radius-panel);background:var(--jx-color-primary);color:var(--jx-color-canvas)}
-.jx-brand-mark>.jx-glyph{width:var(--jx-spacing-6);height:var(--jx-spacing-6)}
+.jx-brand-mark{display:block;flex-shrink:0;width:var(--jx-layout-target);height:var(--jx-layout-target);border-radius:var(--jx-radius-panel);object-fit:contain}
 .jx-brand-copy{display:grid;gap:var(--jx-spacing-1)}.jx-brand-copy strong{font-size:var(--jx-type-display);letter-spacing:.06em}.jx-brand-copy>span{font-size:var(--jx-type-caption);color:var(--jx-color-muted)}
 .jx-nav-item{transition:background var(--jx-motion-duration) var(--jx-motion-easing),color var(--jx-motion-duration) var(--jx-motion-easing)}
 .jx-nav-item>.jx-glyph{color:var(--jx-color-muted)}.jx-nav-item.is-active{background:var(--jx-color-selected);color:var(--jx-color-primary);font-weight:600}.jx-nav-item.is-active>.jx-glyph{color:var(--jx-color-primary)}.jx-nav-item.is-active .jx-badge{background:var(--jx-color-canvas);color:var(--jx-color-primary)}
