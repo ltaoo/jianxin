@@ -140,6 +140,7 @@ impl Tray {
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 struct NativeTray {
     icon: tray_icon::TrayIcon,
+    quit_item: tray_icon::menu::MenuItem,
     actions: std::collections::HashMap<tray_icon::menu::MenuId, Action>,
     incoming: std::sync::mpsc::Receiver<tray_icon::menu::MenuEvent>,
 }
@@ -148,6 +149,7 @@ struct NativeTray {
 impl NativeTray {
     fn menu(
         entries: Vec<Entry>,
+        quit_item: &tray_icon::menu::MenuItem,
     ) -> Result<(
         tray_icon::menu::Menu,
         std::collections::HashMap<tray_icon::menu::MenuId, Action>,
@@ -176,7 +178,10 @@ impl NativeTray {
                 }
                 Entry::Item(text, action) => {
                     let item = if action == Action::Quit {
-                        MenuItem::with_id(QUIT_MENU_ID, text.replace('&', "&&"), true, None)
+                        // Keep the native command ID too: Windows WM_COMMAND
+                        // carries only 16 bits, while muda's counter keeps growing.
+                        quit_item.set_text(text.replace('&', "&&"));
+                        quit_item.clone()
                     } else {
                         MenuItem::new(text.replace('&', "&&"), true, None)
                     };
@@ -199,7 +204,8 @@ impl NativeTray {
                 let _ = sender.send(event);
             },
         ));
-        let (menu, actions) = Self::menu(entries)?;
+        let quit_item = tray_icon::menu::MenuItem::with_id(QUIT_MENU_ID, "", true, None);
+        let (menu, actions) = Self::menu(entries, &quit_item)?;
         #[cfg(target_os = "macos")]
         let icon_bytes = include_bytes!("../../../assets/jianxin-tray-template.png").as_slice();
         #[cfg(target_os = "windows")]
@@ -220,12 +226,13 @@ impl NativeTray {
         crate::macos::configure(&icon)?;
         Ok(Self {
             icon,
+            quit_item,
             actions,
             incoming,
         })
     }
     fn update(&mut self, entries: Vec<Entry>, total: u64) -> Result<()> {
-        let (menu, actions) = Self::menu(entries)?;
+        let (menu, actions) = Self::menu(entries, &self.quit_item)?;
         self.icon.set_menu(Some(Box::new(menu)));
         self.actions = actions;
         self.icon
@@ -391,6 +398,67 @@ impl Drop for NativeTray {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn quit_menu_survives_native_command_id_exhaustion() {
+        use tray_icon::menu::{ContextMenu, Menu, MenuEvent, MenuItem};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, GetMenuItemCount, GetMenuItemID, SendMessageW,
+            WM_COMMAND,
+        };
+
+        fn activate_quit(menu: &Menu) {
+            // Exercise the same subclass and 16-bit command used by a tray click.
+            let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+            unsafe {
+                let window = CreateWindowExW(
+                    0,
+                    class.as_ptr(),
+                    std::ptr::null(),
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null(),
+                );
+                assert!(!window.is_null());
+                let popup = menu.hpopupmenu() as _;
+                let command = GetMenuItemID(popup, GetMenuItemCount(popup) - 1);
+                assert_ne!(command, u32::MAX);
+                menu.attach_menu_subclass_for_hwnd(window as _);
+                SendMessageW(window, WM_COMMAND, (command & 0xffff) as usize, 0);
+                menu.detach_menu_subclass_from_hwnd(window as _);
+                DestroyWindow(window);
+            }
+            assert_eq!(
+                MenuEvent::receiver()
+                    .try_recv()
+                    .expect("native quit click must emit an event")
+                    .id
+                    .as_ref(),
+                QUIT_MENU_ID,
+            );
+        }
+
+        let quit_item = MenuItem::with_id(QUIT_MENU_ID, "", true, None);
+        let (menu, _) = NativeTray::menu(entries(&Snapshot::default(), None), &quit_item).unwrap();
+        activate_quit(&menu);
+        drop(menu);
+        // Menu rebuilds consume numeric IDs even when the string ID is fixed.
+        for _ in 0..=u16::MAX {
+            drop(MenuItem::new("refresh", true, None));
+        }
+        let (menu, actions) =
+            NativeTray::menu(entries(&Snapshot::default(), None), &quit_item).unwrap();
+        assert_eq!(actions.get(&QUIT_MENU_ID.into()), Some(&Action::Quit));
+        activate_quit(&menu);
+    }
+
     #[test]
     fn mailbox_submenu_includes_unsynced_accounts_and_latest_attempt_times() {
         let mailboxes = vec![
