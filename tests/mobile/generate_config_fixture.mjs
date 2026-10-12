@@ -1,6 +1,6 @@
 // Synthetic interoperability vectors; contains no real account credentials.
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { encryptConfig, encryptLegacyConfig } from '../tools/config_crypto.mjs';
+import { encryptConfig, encryptLegacyConfig } from '../../scripts/config_crypto.mjs';
 
 const password = '测试密码🔑-fixture-only';
 const plaintext = JSON.stringify({

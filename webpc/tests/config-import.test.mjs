@@ -13,7 +13,7 @@ for (const file of ['timeless.lite.umd.min.js', 'timeless.dom.umd.min.js']) vm.r
 Object.assign(globalThis, Timeless);
 const find = (node, name) => node?.state?.attributes?.n === name ? node : node?.children?.map(child => find(child, name)).find(Boolean);
 
-const fixture = JSON.parse(fs.readFileSync(new URL('../../mobile/tests/fixtures/config.json', import.meta.url), 'utf8'));
+const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/mobile/fixtures/config.json', import.meta.url), 'utf8'));
 const raw = method => new TextEncoder().encode(method === 'legacy-json' ? JSON.stringify(fixture.envelope) : fixture[method]);
 for (const method of ['aes-256-gcm', 'aes-128-gcm', 'legacy-json']) {
   test(`Web Crypto reads the Android publishing fixture: ${method}, Chinese and emoji password`, async () => {

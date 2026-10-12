@@ -1,5 +1,7 @@
 # 简信原生移动客户端
 
+当前应用版本为 `1.0.0`；Android 在首页右上角“设置 → 关于简信”显示构建配置中的版本号。
+
 独立的 iOS / Android 邮箱客户端，直接连接 IMAP 与 SMTP。iOS 使用 SwiftUI、Foundation、CFNetwork 和 Keychain；Android 使用 Kotlin、Material 3 原生控件、SSLSocket 和 Android Keystore。移动应用不加载 Rust、WebView、跨端框架或 Jianxin 服务，也不需要运行桌面端。
 
 | 能力 | 两端行为 |
@@ -38,8 +40,8 @@ xcodebuild -project ios/Jianxin.xcodeproj -scheme Jianxin \
 离线协议测试与真实本地 TLS 拒绝测试（macOS）：
 
 ```sh
-mobile/tools/test_swift.sh
-python3 mobile/tools/test_tls.py
+scripts/test_swift.sh
+python3 scripts/test_tls.py
 ```
 
 TLS 测试生成临时自签名证书，在本机启动测试服务器，确认隐式 TLS、STARTTLS 均进行 TLS 握手且拒绝不可信证书。测试不修改系统信任、不连接真实邮箱、不发送真实邮件。
@@ -66,7 +68,7 @@ cd android
 ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease
 ```
 
-## 本次验证结果
+## 此前验证结果
 
 - Android 1.0 签名 Release 构建成功，APK 约 1.82 MiB；70 项 Release JVM 单元测试通过，Release Lint 为 0 错误、49 个警告。APK v2 签名与 ZIP 对齐校验通过，最低 Android 8；分享文件为 `artifacts/jianxin-1.0-release.apk`。此次未覆盖安装手机上的调试版本。
 - iOS 真机 arm64 Release 编译成功，未签名 `.app` 目录约 2.0 MB；Swift 离线协议测试及真实本地 TLS / STARTTLS 拒绝证书测试通过。
@@ -146,21 +148,21 @@ Outlook / Microsoft 365 的 OAuth 配置可以没有访问令牌或明文密码�
 
 ## 目录与设计
 
-根目录的 `ios/Jianxin` 是独立 Swift 实现；`android/app` 是独立 Kotlin 实现。`mobile/` 保存两端共用的设计契约、测试、配置加密工具和资源生成脚本。两端协议代码独立，测试均覆盖 MIME、回复头、密送、UIDVALIDITY、UIDPLUS 安全移动和 SMTP 接受/拒绝/未知结果。
+根目录的 `ios/Jianxin` 是独立 Swift 实现；`android/app` 是独立 Kotlin 实现。`scripts/` 保存配置加密、资源生成与测试入口，`tests/mobile/` 保存两端共用测试与测试数据，`docs/mobile.design` 保存共用设计契约。两端协议代码独立，测试均覆盖 MIME、回复头、密送、UIDVALIDITY、UIDPLUS 安全移动和 SMTP 接受/拒绝/未知结果。
 
-Android 使用 `Theme.Material3.Light.NoActionBar` 和 [.design](.design) 的 `platforms.android` 色彩角色，通过主题生成器生成 Kotlin / XML 常量；iOS 继续使用现有 Web 端设计色彩。只更新 Android 主题与提供商图标时运行：
+Android 使用 `Theme.Material3.Light.NoActionBar` 和 [mobile.design](mobile.design) 的 `platforms.android` 色彩角色，通过主题生成器生成 Kotlin / XML 常量；iOS 继续使用现有 Web 端设计色彩。只更新 Android 主题与提供商图标时运行：
 
 ```sh
-python3 mobile/tools/generate_theme.py --platform android
-python3 mobile/tools/generate_provider_icons.py
+python3 scripts/generate_theme.py --platform android
+python3 scripts/generate_provider_icons.py
 ```
 
 同时重新生成两端主题及其他资源：
 
 ```sh
-python3 mobile/tools/generate_theme.py
-python3 mobile/tools/generate_icons.py
-python3 mobile/tools/generate_xcode_project.py
+python3 scripts/generate_theme.py
+python3 scripts/generate-icons.py
+python3 scripts/generate_xcode_project.py
 ```
 
 这些脚本只在开发时使用；安装后的应用不依赖 Python、前端或仓库路径。
@@ -176,7 +178,7 @@ Android 也可在“邮箱 → 从密文文件导入”使用系统文件选择�
 先在电脑上使用配套加密工具（仅需 Node.js 18+，无 npm 依赖）：
 
 ```sh
-node mobile/tools/config_crypto.mjs encrypt \
+node scripts/config_crypto.mjs encrypt \
   /Users/litao/.config/jianxin/config.json \
   /private/tmp/jianxin-config.enc.txt
 ```
@@ -217,9 +219,9 @@ node mobile/tools/config_crypto.mjs encrypt \
 非浏览器验证：
 
 ```sh
-node mobile/tests/config_crypto.test.mjs
-mobile/tools/test_swift.sh
-python3 mobile/tools/test_tls.py
+node tests/mobile/config_crypto.test.mjs
+scripts/test_swift.sh
+python3 scripts/test_tls.py
 ```
 
 跨端测试使用合成配置和中文/emoji 密码，覆盖发布工具 → Swift / Kotlin 两种算法的解密互通、错误密码、错误算法、nonce/密文/标签修改、格式校验、账号合并与旧凭据兼容、下载状态、响应大小及重定向限制。没有下载你的 CDN 或向真实邮箱发信；两端的导入界面与 CDN 更新需在设备上手动验证。

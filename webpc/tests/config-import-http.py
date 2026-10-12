@@ -12,7 +12,7 @@ import threading
 import urllib.parse
 
 executable = pathlib.Path(sys.argv[1]).resolve()
-fixture = json.loads((pathlib.Path(__file__).resolve().parents[2] / 'mobile/tests/fixtures/config.json').read_text(encoding='utf-8'))
+fixture = json.loads((pathlib.Path(__file__).resolve().parents[2] / 'tests/mobile/fixtures/config.json').read_text(encoding='utf-8'))
 incoming = json.loads(fixture['plaintext'])
 with tempfile.TemporaryDirectory(prefix='jianxin-config-import-') as directory:
     root = pathlib.Path(directory)

@@ -24,7 +24,7 @@ final class IMAPClient {
         }
         let cap=try command("CAPABILITY").text.uppercased()
         capabilities=Set(cap.split(whereSeparator:{$0.isWhitespace}).map(String.init))
-        if capabilities.contains("ID") { _=try command("ID (\"name\" \"Jianxin\" \"version\" \"1.0\")") }
+        if capabilities.contains("ID") { _=try command("ID (\"name\" \"Jianxin\" \"version\" \"1.0.0\")") }
     }
     deinit { socket.close() }
     static func quote(_ text:String) -> String { "\"" + text.replacingOccurrences(of:"\\",with:"\\\\").replacingOccurrences(of:"\"",with:"\\\"").replacingOccurrences(of:"\r",with:"").replacingOccurrences(of:"\n",with:"") + "\"" }

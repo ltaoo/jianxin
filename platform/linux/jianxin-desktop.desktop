@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=简信
-Comment=查看最新未读邮件
+Comment=托盘与本地 Web 服务，在浏览器中管理邮箱和邮件
 Exec=jianxin-desktop
 Icon=jianxin
 Terminal=false

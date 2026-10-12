@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { encryptConfig, decryptConfig, encryptLegacyConfig, decryptLegacyConfig } from '../tools/config_crypto.mjs';
+import { encryptConfig, decryptConfig, encryptLegacyConfig, decryptLegacyConfig } from '../../scripts/config_crypto.mjs';
 const fixture = JSON.parse(readFileSync(new URL('fixtures/config.json', import.meta.url)));
 const bytes = Buffer.from(fixture.plaintext), encrypted = Buffer.from(JSON.stringify(fixture.envelope));
 assert.deepEqual(decryptLegacyConfig(encrypted, fixture.password), bytes);
@@ -41,7 +41,7 @@ catch (error) {
 try {
   const source = join(directory, 'config.json'), destination = join(directory, 'config.enc.json');
   writeFileSync(source, bytes, { mode: 0o600 });
-  const tool = fileURLToPath(new URL('../tools/config_crypto.mjs', import.meta.url));
+  const tool = fileURLToPath(new URL('../../scripts/config_crypto.mjs', import.meta.url));
   const run = (...args) => spawnSync(process.execPath, [tool, ...args], { env: { ...process.env, JIANXIN_CONFIG_PASSWORD: fixture.password }, encoding: 'utf8' });
   const result = run('encrypt', source, destination);
   assert.equal(result.status, 0, result.stderr);

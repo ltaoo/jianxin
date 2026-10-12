@@ -20,7 +20,7 @@
   "updated_at": "2026-10-12",
   "agent": {
     "skill": "design",
-    "instructions": "Use the existing Jianxin color, typography and spacing tokens in native SwiftUI and Android views. Generate platform constants with tools/generate_theme.py. Never invoke or automate a browser. Keep real direct IMAP/SMTP data, native text readers, 44pt/48dp targets and loading/empty/retry states."
+    "instructions": "Use the existing Jianxin color, typography and spacing tokens in native SwiftUI and Android views. Generate platform constants with scripts/generate_theme.py from the repository root. Never invoke or automate a browser. Keep real direct IMAP/SMTP data, native text readers, 44pt/48dp targets and loading/empty/retry states."
   },
   "intent": {
     "direction": "Independent compact native mailbox clients; single-pane phone reading and native navigation.",

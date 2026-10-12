@@ -29,7 +29,7 @@ python3 scripts/generate-icons.py --reset web
 python3 scripts/generate-icons.py --reset tray --reset android
 ```
 
-源文件需为包含 viewBox 的自包含 SVG。脚本在写入前完成全部渲染；错误不会覆盖原资源。主源文件会复制进仓库。旧入口 `mobile/tools/generate_icons.py` 和 `scripts/generate-windows-icon.ps1` 调用同一脚本，不再各自绘制旧 Logo。
+源文件需为包含 viewBox 的自包含 SVG。脚本在写入前完成全部渲染；错误不会覆盖原资源。主源文件会复制进仓库。Windows 入口 `scripts/generate-windows-icon.ps1` 调用同一脚本。
 
 | 场景 | 输出 / 消费位置 |
 | --- | --- |
@@ -45,7 +45,7 @@ python3 scripts/generate-icons.py --reset tray --reset android
 
 macOS 通知角标由系统使用 `.app` 图标，跟随 `macos` 场景；无法通过 `--notification-source` 单独替换该角标。当前保留一个来自同一图案的透明单色托盘源，换主图时可同时提供新的 `--tray-source`。
 
-生成资源不会修改已安装或正在运行的应用。替换后重新构建各端并安装新版本；macOS 执行 `bash scripts/build-macos-app.sh`（加 `--install` 安装），Windows 执行 `scripts/build-desktop.ps1`，Android / iOS 构建方式见 [移动端说明](../mobile/README.md)。系统或浏览器缓存图标时，退出旧版本后重新启动或刷新页面。
+生成资源不会修改已安装或正在运行的应用。替换后重新构建各端并安装新版本；macOS 执行 `bash scripts/build-macos-app.sh`（加 `--install` 安装），Windows 执行 `scripts/build-desktop.ps1`，Android / iOS 构建方式见 [移动端说明](../docs/mobile.md)。系统或浏览器缓存图标时，退出旧版本后重新启动或刷新页面。
 
 验证与回归检查：
 

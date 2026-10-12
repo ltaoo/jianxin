@@ -151,7 +151,7 @@ export function MailMessage({ store, service }) {
           'aria-label': `查看发件人 ${store.state.sender || '未知发件人'} 的详情`, 'aria-expanded': pick(s => String(s.infoPanel === 'sender')), 'aria-controls': `info-${store.state.id}` },
           onClick() { store.toggleInfo('sender'); } }, [
           View({ as: 'strong', class: 'jx-truncate', attributes: { n: 'mail-message-sender-name' } }, [store.state.sender || '未知发件人']),
-          store.state.sender_email && store.state.sender_email !== store.state.sender && View({ as: 'span', class: 'jx-muted jx-truncate', attributes: { n: 'mail-message-sender-email', title: store.state.sender_email } }, [`<${store.state.sender_email}>`]),
+          store.state.sender_email && store.state.sender_email !== store.state.sender ? View({ as: 'span', class: 'jx-muted jx-truncate', attributes: { n: 'mail-message-sender-email', title: store.state.sender_email } }, [`<${store.state.sender_email}>`]) : undefined,
         ]),
         View({ as: 'button', class: 'jx-recipient-details-button jx-muted jx-truncate', attributes: { n: 'mail-message-recipient', type: 'button', title: store.state.recipient,
           'aria-label': '查看收件人详情', 'aria-expanded': pick(s => String(s.infoPanel === 'sender')), 'aria-controls': `info-${store.state.id}` }, onClick() { store.toggleInfo('sender'); } }, [`发送至 ${store.state.recipient || '未提供'}`, Glyph('next')]),
@@ -182,7 +182,7 @@ export function MailMessage({ store, service }) {
     Show({ when: pick(s => s.infoPanel === 'metadata'), ok: () => InfoPanel(true) }),
     Show({ when: pick(s => s.expanded), ok: () => View({ attributes: { n: 'mail-message-content', id: `body-${store.state.id}` } }, [
       View({ class: 'jx-message-body-wrap', attributes: { n: 'mail-message-body' } }, [BodyFrame()]),
-      store.state.attachment_count > 0 && View({ class: 'jx-attachment-note', attributes: { n: 'mail-attachment-note' } }, [Glyph('attachment'), `${store.state.attachment_count} 个附件 · 当前阅读器暂不支持下载`]),
+      store.state.attachment_count > 0 ? View({ class: 'jx-attachment-note', attributes: { n: 'mail-attachment-note' } }, [Glyph('attachment'), `${store.state.attachment_count} 个附件 · 当前阅读器暂不支持下载`]) : undefined,
       View({ class: 'jx-message-footer', attributes: { n: 'mail-message-actions' } }, [
         View({ as: 'button', class: 'jx-button jx-button--secondary jx-reply-pill', attributes: { n: 'mail-reply-bottom', type: 'button' }, onClick() { store.openReply(); } }, [Glyph('reply'), '回复']),
         View({ as: 'span', class: 'jx-muted', attributes: { n: 'mail-read-state' } }, [readLabel]),

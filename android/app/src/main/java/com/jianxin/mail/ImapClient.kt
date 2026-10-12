@@ -19,7 +19,7 @@ class ImapClient(private val account: MailAccount, private val wire: MailWire = 
                 else command("LOGIN ${quote(account.imapLogin)} ${quote(account.credential)}", authentication = true)
             }
             capabilities = command("CAPABILITY").text.uppercase(Locale.ROOT).split(Regex("\\s+")).toSet()
-            if ("ID" in capabilities) command("ID (\"name\" \"Jianxin\" \"version\" \"1.0\")")
+            if ("ID" in capabilities) command("ID (\"name\" \"Jianxin\" \"version\" \"${BuildConfig.VERSION_NAME}\")")
         } catch (e: Exception) { wire.close(); throw e }
     }
     fun command(text: String, continuation: ByteArray? = null, authentication: Boolean = false): ImapReply {

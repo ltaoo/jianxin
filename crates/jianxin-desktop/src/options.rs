@@ -55,7 +55,7 @@ impl Options {
                     });
                 }
                 "--help" | "-h" => {
-                    println!("简信：原生托盘与 Web 阅读器\n启动后点击托盘查看最近 10 封未读邮件。\n可选：--config <路径>、--show、--no-daemon");
+                    println!("简信：桌面托盘与本地 Web 服务\n启动后只有托盘，不提供原生桌面邮件应用。点击托盘在默认浏览器中管理邮箱和邮件。\n可选：--config <路径>、--show（打开浏览器）、--no-daemon");
                     std::process::exit(0);
                 }
                 "--version" | "-V" => {

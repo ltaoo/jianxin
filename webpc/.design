@@ -294,43 +294,22 @@
       "width": "{tokens.layout.agent-width}",
       "backgroundColor": "{tokens.color.canvas}"
     },
-    "UnreadTrayPanel": {
-      "when": "Native GPUI Kit window opened from system tray; latest 30 unread messages across accounts, local refresh every 5 seconds, title/time/mailbox, accessible open controls and loading/empty/error states",
-      "width": "{tokens.layout.notification}",
-      "height": "{tokens.layout.trayHeight}",
-      "backgroundColor": "{tokens.color.canvas}",
-      "textColor": "{tokens.color.text}",
-      "typography": "{tokens.type.control}",
-      "theme": "Follow system appearance at creation and while open; desktop dark colors use themes.desktop.dark.color, including text, errors, button hover, borders and scrollbars.",
-      "footer": "Reader and refresh actions on the left; the bottom-right exit button stops background mail polling before quitting the desktop app. Failure keeps the app open with a retryable error. The tray menu exit action uses the same complete shutdown.",
-      "rowContextMenu": "Mail rows have no hover tooltip and no left-click navigation. Right-click menu 在浏览器中打开 opens that exact message in the existing Web reader; follows current desktop theme."
-    },
-    "ConfigEncryptionWindow": {
-      "when": "Native GPUI Kit configuration encryption tool opened from the tray menu or unread panel",
-      "width": "{tokens.layout.configEncryptionWidth}",
-      "height": "{tokens.layout.configEncryptionHeight}",
-      "backgroundColor": "{tokens.color.canvas}",
-      "textColor": "{tokens.color.text}",
-      "typography": "{tokens.type.control}",
-      "controls": "Labelled read-only current config path, masked encryption key input, one primary generate button, read-only ciphertext textarea and secondary copy button; reuse native GPUI Kit Input, Textarea and Button controls with layout.target height, radius.control and desktop system appearance.",
-      "behavior": "A normal window remains open on blur; reopening activates the same form, closing discards it. Generate rereads the active config path and runs mobile-compatible AES-256-GCM encryption off the UI thread. Show progress and retryable errors, clear stale ciphertext on a key change or retry, and enable copying only after success. Never display plaintext configuration or include credentials in errors."
-    },
     "ConfigImport": {
       "when": "Explicit import from encrypted file or HTTPS URL in the Web reader",
       "width": "{tokens.layout.notification}",
       "backgroundColor": "{tokens.color.canvas}",
-      "behavior": "Native modal dialog with source, cipher and password fields; browser-only decryption; preview and select accounts before saving. Preserve other accounts and desktop general settings. Never persist the decryption key."
+      "behavior": "Browser dialog with source, cipher and password fields; browser-only decryption; preview and select accounts before saving. Preserve other accounts and desktop general settings. Never persist the decryption key."
     },
     "ReplyWindow": {
       "when": "Manual reply in a page-owned floating window with editable To/Cc, local correspondent search and attachments",
       "width": "{tokens.layout.composeWidth}",
       "height": "{tokens.layout.composeHeight}",
       "backgroundColor": "{tokens.color.canvas}",
-      "behavior": "Drag title bar or use arrow keys; native desktop resize; mobile viewport fit. Preserve draft during mail navigation, confirm discard, validate recipient and attachment limits, and use the durable outbox for send. Automatically inherit Re: subject in the title; hide the subject editor until explicit edit. Minimize and maximize preserve the draft."
+      "behavior": "Drag title bar or use arrow keys; resize within the browser page; mobile viewport fit. Preserve draft during mail navigation, confirm discard, validate recipient and attachment limits, and use the durable outbox for send. Automatically inherit Re: subject in the title; hide the subject editor until explicit edit. Minimize and maximize preserve the draft."
     },
     "NativeTrayMenu": {
       "when": "Desktop tray left/right click; system-native menu follows OS typography, colors, spacing, focus and theme.",
-      "behavior": "Show the latest 10 real unread mail subjects in descending time order, global unread total, empty/loading/error labels and reader/refresh/quit actions. Mail clicks route by local ID to the owning account and folder. Opening the menu does not mark mail read. Normalize control characters and bound long subjects. Do not create a GPUI popup."
+      "behavior": "Show the latest 10 real unread mail subjects in descending time order, global unread total, empty/loading/error labels and reader/refresh/quit actions. Mail clicks route by local ID to the owning account and folder. Opening the menu does not mark mail read. Normalize control characters and bound long subjects. The desktop starts only a tray and local Web service; mailbox and mail management open in the default browser. Do not create native mail windows."
     }
   },
   "patterns": {

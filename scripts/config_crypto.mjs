@@ -89,7 +89,7 @@ async function main() {
     else if (options[i] === '--cipher' && options[i + 1]) method = options[++i];
     else throw new Error('参数无效：支持 --force 和 --cipher aes-256-gcm|aes-128-gcm');
   }
-  if (mode !== 'encrypt' || !source || !destination) throw new Error('用法：node mobile/tools/config_crypto.mjs encrypt config.json config.enc.txt [--cipher aes-256-gcm|aes-128-gcm] [--force]');
+  if (mode !== 'encrypt' || !source || !destination) throw new Error('用法：node scripts/config_crypto.mjs encrypt config.json config.enc.txt [--cipher aes-256-gcm|aes-128-gcm] [--force]');
   methodSettings(method);
   if (resolve(source) === resolve(destination)) throw new Error('输出路径不能覆盖原始 config.json');
   const raw = readFileSync(source);

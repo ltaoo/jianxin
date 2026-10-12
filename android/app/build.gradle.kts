@@ -8,7 +8,8 @@ val releaseSigning = Properties().apply {
 android {
     namespace = "com.jianxin.mail"
     compileSdk = 35
-    defaultConfig { applicationId = "com.jianxin.mail"; minSdk = 26; targetSdk = 35; versionCode = 1; versionName = "1.0"; testInstrumentationRunner = "com.jianxin.mail.ImapRuntimeChecks" }
+    defaultConfig { applicationId = "com.jianxin.mail"; minSdk = 26; targetSdk = 35; versionCode = 2; versionName = "1.0.0"; testInstrumentationRunner = "com.jianxin.mail.ImapRuntimeChecks" }
+    buildFeatures { buildConfig = true }
     signingConfigs {
         if (releaseSigningFile.isFile) {
             create("release") {
@@ -29,7 +30,7 @@ android {
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
-    sourceSets.getByName("test").resources.srcDir("../../mobile/tests/fixtures")
+    sourceSets.getByName("test").resources.srcDir("../../tests/mobile/fixtures")
 }
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")

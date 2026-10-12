@@ -1,5 +1,7 @@
 # 简信 Web / design + jxui
 
+这是浏览器中的邮箱和邮件管理界面。桌面程序启动后只有托盘并提供本地 Web 服务，点击托盘菜单在默认浏览器中打开本界面；不提供原生桌面邮件应用。
+
 前端以 Cloudflare [Agentic Inbox](https://github.com/cloudflare/agentic-inbox) 的
 `demo_app.png`、Sidebar、Header、MailboxSplitView 和 email-list 为视觉参考。
 参考 revision：`48039bb6785af34e592c2966f87cde2b255c4c80`。
@@ -36,8 +38,10 @@ TMPDIR=/private/tmp cargo test -p jianxin-cli -p jianxin-store -p jianxin-core
 bash scripts/build-macos-app.sh --install
 ```
 
-构建器使用本目录的 esbuild 0.27.4，依赖由 `package-lock.json` 锁定。需要 Node.js 18+，首次构建前运行 `npm ci --prefix webpc`。
+构建器使用本目录的 esbuild 0.27.4，依赖由 `package-lock.json` 锁定。需要 Node.js 18.20+，首次构建前运行 `npm ci --prefix webpc`。
 CLI 的 Cargo build script 自动构建并嵌入 Web 资源，监听源码和设计契约变化；无需先生成 `dist`，也无需相邻的 timeless 项目。macOS、Windows、Linux 打包均使用这条构建链路。
+
+侧栏底部显示应用版本，来自 `package.json` 的 `version`，随前端构建嵌入。
 
 更新 timeless 时，应从对应版本的本地 `dist/timeless/<version>` 更新两份 runtime，
 同时更新 vendor manifest 和许可证，再重新执行全部非浏览器检查。

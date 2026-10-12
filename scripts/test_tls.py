@@ -11,8 +11,8 @@ with tempfile.TemporaryDirectory(prefix='jianxin-tls-') as temp:
     temp=Path(temp)
     subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-keyout',str(temp/'key.pem'),'-out',str(temp/'cert.pem'),'-days','1','-subj','/CN=localhost'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     probe=temp/'probe'
-    sources=[root.parent/'ios/Jianxin'/f for f in ['Models.swift','MIME.swift','TLSSocket.swift','IMAPClient.swift','ConfigEncryption.swift','RemoteConfig.swift']]
-    subprocess.run(['swiftc','-module-cache-path',str(temp/'cache'),*[str(p) for p in sources],str(root/'tests/swift/TLSRejectionProbe.swift'),'-o',str(probe)],check=True)
+    sources=[root/'ios/Jianxin'/f for f in ['Models.swift','MIME.swift','TLSSocket.swift','IMAPClient.swift','ConfigEncryption.swift','RemoteConfig.swift']]
+    subprocess.run(['swiftc','-module-cache-path',str(temp/'cache'),*[str(p) for p in sources],str(root/'tests/mobile/swift/TLSRejectionProbe.swift'),'-o',str(probe)],check=True)
     context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);context.minimum_version=ssl.TLSVersion.TLSv1_2;context.load_cert_chain(temp/'cert.pem',temp/'key.pem')
     for mode in ['tls','starttls','https']:
         errors=[]

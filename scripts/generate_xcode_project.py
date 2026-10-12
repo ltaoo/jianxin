@@ -2,7 +2,7 @@
 """Small deterministic project generator; no XcodeGen/Ruby dependency."""
 from pathlib import Path
 import hashlib
-root=Path(__file__).resolve().parents[2]/'ios'
+root=Path(__file__).resolve().parents[1]/'ios'
 def uid(value): return hashlib.sha256(value.encode()).hexdigest()[:24].upper()
 files=sorted((root/'Jianxin').glob('*.swift'))
 objects=[]
@@ -28,7 +28,7 @@ for mode in ['Debug','Release']:
     GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = "简信"; INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
     INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-    CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; CODE_SIGN_STYLE = Automatic;
+    CURRENT_PROJECT_VERSION = 2; MARKETING_VERSION = 1.0.0; CODE_SIGN_STYLE = Automatic;
     SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; {flags}
     }};''')
 for key in ['project','target']:

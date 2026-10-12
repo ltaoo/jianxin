@@ -12,8 +12,8 @@ def attr(name): return '{' + android + '}' + name
 def color(value):
     if value.lower() == '#fff': return '#FFFFFF'
     return value
-output = root.parent / 'android/app/src/main/res/drawable'
-for source in sorted((root.parent / 'assets/mail-providers/svg-exact').glob('*.svg')):
+output = root / 'android/app/src/main/res/drawable'
+for source in sorted((root / 'assets/mail-providers/svg-exact').glob('*.svg')):
     svg = ET.parse(source).getroot()
     x, y, width, height = map(float, svg.attrib['viewBox'].split())
     assert x == 0 and y == 0

@@ -406,6 +406,8 @@ test('conversation mailbox favicons share sidebar accounts, react to platform ch
   assert.equal(find(views[1].view, 'conversation-mailbox-favicon').state.attributes.src, '/secret/assets/mail-providers/outlook.svg');
   assert.equal(find(views[2].view, 'conversation-mailbox-favicon'), undefined);
   assert.equal(find(views[0].view, 'conversation-mailbox-email').state.attributes.title, 'a@custom.example');
+  const senderRow = find(views[0].view, 'conversation-sender-row');
+  assert(!senderRow.children.some(node => node?.t === 'text' && node.state.value === 'false'));
   accounts = accounts.map(account => account.id === 'a' ? { ...account, platform: '163' } : account);
   await model.methods.loadMailboxes();
   const image = find(views[0].view, 'conversation-mailbox-favicon');
@@ -723,6 +725,9 @@ test('page builds real Timeless VNodes from reusable jxui without a browser', ()
   assert.equal(reload.state.as, 'button'); assert.equal(reload.state.attributes['aria-label'], '刷新邮箱配置');
   const navigation = page.children[0].children[1].children;
   assert.deepEqual(navigation.slice(0, 3).map(node => node.state.attributes.n), ['mail-navigation-all', 'mail-navigation-unread', 'mail-navigation-starred']);
+  const version = page.children[0].children[2].children.find(node => node.state.attributes?.n === 'app-version');
+  assert.equal(version.state.as, 'p');
+  assert.equal(version.children[1].state.value, JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url))).version);
   // This test does not mount the page or invoke any browser APIs.
 });
 
@@ -730,9 +735,12 @@ test('page builds real Timeless VNodes from reusable jxui without a browser', ()
 test('message view builds a sandboxed frame using actual Timeless primitives', () => {
   const service = { body() { return '/secret/body/mail-1?images=0'; } };
   const core = messageCore(service);
+  core.set({ sender: 'sender@example.com', sender_email: 'sender@example.com', attachment_count: 0 });
   const view = MailMessage({ store: core, service });
   assert.equal(view.state.as, 'article');
   assert.equal(view.state.attributes.id, 'mail-mail-1');
+  const falseText = node => node?.t === 'text' && node.state.value === 'false' || node?.children?.some(falseText);
+  assert(!falseText(view));
   // Creation exercises lazy expanded content without mounting or opening a browser.
   assert.ok(view.children.length); view.onUnmounted(); core.destroy();
 });

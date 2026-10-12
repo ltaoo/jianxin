@@ -36,7 +36,7 @@ desktop-tray-status.json
 *.sqlite3-*
 .DS_Store
 config.json
-!/mobile/tests/fixtures/config.json
+!/tests/mobile/fixtures/config.json
 !config.example.json
 .env
 .env.*

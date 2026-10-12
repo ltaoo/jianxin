@@ -1,4 +1,4 @@
-// Wire-compatible with mobile/tools/config_crypto.mjs and Android RemoteConfig.
+// Wire-compatible with scripts/config_crypto.mjs and Android RemoteConfig.
 export const CONFIG_LIMIT = 2 * 1024 * 1024;
 const text = new TextDecoder('utf-8', { fatal: true });
 const utf8 = new TextEncoder();

@@ -1,5 +1,7 @@
 # Desktop notifications
 
+The desktop program provides a tray and a local Web service, without a native mail window. Manage mailboxes and messages in the default browser opened from the tray; closing the browser leaves the tray and service running.
+
 The desktop program polls mail in-process and emits native **local** notifications.
 Standalone CLI users can separately run `jianxin daemon`. It does not
 use APNs, FCM, or a cloud push relay, and never uploads mail to a notification
@@ -71,7 +73,7 @@ macOS 中同一 ID 会使用同一通知标识，可用唯一 ID 区分各次任
 旧的 `/<随机令牌>/api/notifications` 已停用。
 桌面程序已内置持续运行的 Web 服务，端口由系统自动分配，地址写入桌面启动输出 / App 日志；把示例中的 8787 替换为该端口。仅启动独立 CLI 的收信 daemon 不会提供此 HTTP 接口。
 macOS 需已安装 Jianxin.app 并已允许系统通知。
-点击通知直接打开 Web 邮件阅读器，跳过临时窗口；此接口不支持执行命令或自定义跳转地址。
+点击通知直接在默认浏览器中打开 Web 邮件阅读器；此接口不支持执行命令或自定义跳转地址。
 
 ## macOS
 
@@ -79,7 +81,7 @@ macOS 需已安装 Jianxin.app 并已允许系统通知。
 bash scripts/build-macos-app.sh --install
 ```
 
-Requires Xcode command line tools, Rust 1.92+ for the native desktop, and Node.js 18+ for the embedded Web client. Run `npm ci --prefix webpc` before the first build. The AppKit tray and Swift notification helper target macOS 11+. The build script
+Requires Xcode command line tools, Rust 1.92+ for the tray program, and Node.js 18.20+ for the embedded Web client. Run `npm ci --prefix webpc` before the first build. The AppKit tray and Swift notification helper target macOS 11+. The build script
 produces a signed (ad-hoc, for local use) `~/Applications/Jianxin.app`, creates
 all icon sizes, and registers `com.jianxin.mail` with LaunchServices. Existing
 bundles are moved to the printed temporary build/backup directory, not deleted.

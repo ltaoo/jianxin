@@ -3,7 +3,7 @@ name = "jianxin-desktop"
 version.workspace = true
 edition.workspace = true
 rust-version = "1.92"
-description = "Jianxin native tray and embedded Web reader"
+description = "Jianxin tray and local Web service for browser-based mail management"
 build = "../../platform/windows/build.rs"
 
 [dependencies]

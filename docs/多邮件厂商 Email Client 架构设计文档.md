@@ -3,6 +3,8 @@
 **版本：** v1.0  
 **目标：** 构建支持 Gmail、Outlook/Microsoft 365、QQ、163、阿里云及通用 IMAP/SMTP 邮箱的现代 Email Client。
 
+当前桌面实现为托盘程序与本地 Web 服务，启动后只有托盘，不提供原生桌面邮件应用；邮箱和邮件在浏览器中管理。本文中的推荐方案属于架构规划，实际使用与构建以 [桌面托盘说明](desktop-tray.md) 为准。
+
 ---
 
 # 1. 设计目标
@@ -445,7 +447,7 @@ Microsoft Graph 可以直接访问个人 Microsoft Account 和组织账户中的
              Access Token   Refresh Token
 ```
 
-桌面应用推荐：
+桌面环境的授权方案规划：
 
 ```text
 Authorization Code

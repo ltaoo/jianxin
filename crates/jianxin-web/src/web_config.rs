@@ -385,7 +385,9 @@ mod tests {
                     "CAPABILITY" => stream.write_all(b"* CAPABILITY IMAP4rev1\r\n").unwrap(),
                     "LIST" => stream.write_all(b"* LIST () \"/\" \"INBOX\"\r\n").unwrap(),
                     "LOGOUT" => {
-                        write!(stream, "* BYE\r\n{tag} OK done\r\n").unwrap();
+                        stream
+                            .write_all(format!("* BYE logging out\r\n{tag} OK done\r\n").as_bytes())
+                            .unwrap();
                         break;
                     }
                     _ => {}
@@ -436,7 +438,7 @@ mod tests {
     #[test]
     fn preview_validates_accounts_and_omits_credentials() {
         let fixture: Value =
-            serde_json::from_str(include_str!("../../../mobile/tests/fixtures/config.json"))
+            serde_json::from_str(include_str!("../../../tests/mobile/fixtures/config.json"))
                 .unwrap();
         let mut value: Value =
             serde_json::from_str(fixture["plaintext"].as_str().unwrap()).unwrap();

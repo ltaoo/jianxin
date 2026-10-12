@@ -14,7 +14,16 @@ pub struct OpenRequest {
     pub account: Option<String>,
 }
 
-pub fn lock(data_dir: &Path) -> Result<Option<File>> {
+pub struct InstanceLock(File);
+
+impl Drop for InstanceLock {
+    fn drop(&mut self) {
+        // A concurrent subprocess launch can temporarily inherit the file descriptor.
+        let _ = fs2::FileExt::unlock(&self.0);
+    }
+}
+
+pub fn lock(data_dir: &Path) -> Result<Option<InstanceLock>> {
     std::fs::create_dir_all(data_dir)?;
     let file = OpenOptions::new()
         .create(true)
@@ -23,7 +32,7 @@ pub fn lock(data_dir: &Path) -> Result<Option<File>> {
         .write(true)
         .open(data_dir.join("desktop.lock"))?;
     match fs2::FileExt::try_lock_exclusive(&file) {
-        Ok(()) => Ok(Some(file)),
+        Ok(()) => Ok(Some(InstanceLock(file))),
         Err(error)
             if error.kind() == std::io::ErrorKind::WouldBlock
                 || error.raw_os_error() == fs2::lock_contended_error().raw_os_error() =>
@@ -99,8 +108,12 @@ mod tests {
         enqueue(&directory, &request).unwrap();
         assert_eq!(drain(&directory), vec![request]);
         assert!(drain(&directory).is_empty());
+        #[cfg(unix)]
+        let inherited = owner.0.try_clone().unwrap();
         drop(owner);
         assert!(lock(&directory).unwrap().is_some());
+        #[cfg(unix)]
+        drop(inherited);
         std::fs::remove_dir_all(directory).unwrap();
     }
 }

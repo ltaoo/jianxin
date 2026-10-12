@@ -78,7 +78,7 @@ export function ConversationRow({ store, thread, mailbox, root = '', favorite = 
   }, [Avatar({ name: thread.sender || thread.account_email }), View({ as: 'span', class: 'jx-unread-dot', attributes: { n: 'conversation-unread-indicator', 'aria-label': thread.unread_count ? '未读' : '已读' } }),
     View({ class: 'jx-conversation-content', attributes: { n: 'conversation-summary' } }, [
       View({ class: 'jx-row', attributes: { n: 'conversation-sender-row' } }, [View({ as: 'span', class: 'jx-sender jx-truncate', attributes: { n: 'conversation-sender' } }, [thread.sender || thread.account_email]),
-        thread.message_count > 1 && Badge({}, [String(thread.message_count)]),
+        thread.message_count > 1 ? Badge({}, [String(thread.message_count)]) : undefined,
         RelativeTime({ timestamp: thread.last_message_at })]),
       View({ class: 'jx-subject jx-truncate', attributes: { n: 'conversation-subject' } }, [thread.subject || '（无主题）']),
       View({ class: 'jx-snippet jx-truncate', attributes: { n: 'conversation-snippet' } }, [thread.snippet || '（无邮件摘要）']),
@@ -272,7 +272,7 @@ export function NotificationCenter({ store }) {
         return View({ as: 'article', class: `jx-notification-item ${item.read ? 'is-read' : 'is-unread'}` }, [
           View({ class: 'jx-notification-symbol' }, [Glyph('spam')]),
           View({ class: 'jx-notification-content' }, [View({ as: 'strong' }, [item.title]), View({ as: 'p' }, [item.message]),
-            View({ class: 'jx-row' }, [RelativeTime({ timestamp: item.timestamp }), item.count > 1 && Badge({}, [`${item.count} 次`]),
+            View({ class: 'jx-row' }, [RelativeTime({ timestamp: item.timestamp }), item.count > 1 ? Badge({}, [`${item.count} 次`]) : undefined,
               View({ as: 'button', class: 'jx-button jx-button--ghost', attributes: { type: 'button' }, onClick() { store.setRead(item.id, !item.read); } }, [item.read ? '标为未读' : '标为已读']),
             ]),
           ]),

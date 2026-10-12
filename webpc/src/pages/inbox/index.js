@@ -59,6 +59,7 @@ export function InboxPageView(props) {
         View({ as: 'a', class: 'jx-button jx-button--ghost', attributes: { n: 'sync-logs-navigation', href: `${props.root}/logs` } }, [Glyph('clock'), '同步日志']),
         Show({ when: s.configStatus, ok: () => View({ as: 'p', class: 'jx-muted', attributes: { n: 'mailbox-config-feedback', role: 'status' } }, [s.configStatus]) }),
         View({ class: 'jx-row' }, [Glyph('server'), '本地邮件阅读器']),
+        View({ as: 'p', class: 'jx-muted', attributes: { n: 'app-version' } }, ['版本 ', s.version]),
         View({ as: 'p', class: 'jx-muted' }, ['后台自动收信，刷新查看新邮件。'])]),
     ]);
   }

@@ -778,6 +778,7 @@ class MainActivity : AppCompatActivity() {
     private fun showSettings() {
         page("设置","settings")
         val form = material.form(content)
+        material.card(form,"关于简信").addView(material.text("版本 ${BuildConfig.VERSION_NAME}"))
         val time = material.card(form,"时间显示")
         time.addView(material.text("邮件列表和阅读页使用此格式，按手机的时区显示。"))
         var selected = if (timeStyle in listOf(MailTime.DEFAULT,MailTime.TWELVE)) timeStyle else "custom"

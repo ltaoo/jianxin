@@ -2,6 +2,7 @@ import { ControlCore, MailboxCore, NotificationCore } from '../../../packages/jx
 import { MailService } from '../../services.js';
 import { ReplyCore } from '../../../packages/jxui/reply-core.js';
 import { ConfigImportCore } from '../../../packages/jxui/config-import-core.js';
+import packageInfo from '../../../package.json' with { type: 'json' };
 
 export function MessageCore(message, { service, options, expanded, changed, starredChanged = () => {}, started = () => {}, settled = () => {}, failed = () => {}, reply = () => {} }) {
   const core = ControlCore({ ...message, expanded, options, pending: false, error: '', status: '', autoAttempted: false,
@@ -81,6 +82,7 @@ export function MessageCore(message, { service, options, expanded, changed, star
 export function InboxPageModel({ root, location, history, storage, service = MailService(root), timers = globalThis }) {
   const initial = new URL(location.href);
   const state = {
+    version: ref(packageInfo.version),
     accounts: ref([]), accountGroups: ref([]), folders: ref([]), account: ref(initial.searchParams.get('account') || ''),
     folder: ref(initial.searchParams.get('folder') || ''), query: ref(initial.searchParams.get('q') || ''),
     unread: ref(initial.searchParams.get('unread') === '1'), page: ref(Number(initial.searchParams.get('page')) || 0),
