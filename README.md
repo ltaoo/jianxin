@@ -47,7 +47,7 @@
 
 ## 界面预览
 
-以下是 `1.0.0` 实际运行界面的截图，使用示例账号和邮件。首次安装后先添加自己的邮箱并同步，才会出现邮件列表。
+以下是 `1.0.0` 实际运行界面的截图，桌面与 Web 截图使用示例账号和邮件。首次安装后先添加自己的邮箱并同步，才会出现邮件列表。
 
 **启动后：桌面托盘。** 默认只显示托盘；点击「打开邮件阅读器」进入浏览器。「退出应用」会停止托盘、Web 服务和后台收信。下图为 macOS，Windows / Linux 的托盘菜单随系统外观显示。
 
@@ -60,6 +60,18 @@
 **第一次使用：添加邮箱。** 点击侧栏的「添加邮箱」，选择服务商后填写邮箱地址和密码 / 客户端授权码，也可以导入已有的加密配置。
 
 <img src="docs/screenshots/add-mailbox.png" alt="添加邮箱界面，展示服务商选择、邮箱地址、名称和客户端授权码输入栏" width="1200" data-n="readme-add-mailbox-screenshot" />
+
+**Android：原生移动应用。** 以下图片来自 2026-10-12 在 OnePlus 5（Android 10）上拍摄的实机截图，运行从当前源码构建的 `1.0.0` 调试版。首页汇总多个邮箱的邮件，侧边栏切换邮箱与文件夹，邮件管理菜单提供星标、已读状态、移动和删除入口。前三张经 AI 图像编辑脱敏，遮挡邮箱地址、发件人及邮件内容。
+
+| 首页邮件列表 | 邮箱与文件夹侧边栏 | 邮件管理 |
+| --- | --- | --- |
+| <img src="docs/screenshots/android-inbox.png" alt="Android 首页邮件列表，展示搜索、未读筛选、服务商标签和星标，发件人与主题已脱敏" width="280" data-n="readme-android-inbox-screenshot" /> | <img src="docs/screenshots/android-sidebar.png" alt="Android 侧边栏，展示邮箱文件夹、草稿和发件记录，邮箱地址与背景邮件内容已脱敏" width="280" data-n="readme-android-sidebar-screenshot" /> | <img src="docs/screenshots/android-mail-management.png" alt="Android 邮件管理菜单，展示回复全部、转发、星标、标为未读、移动和删除入口，邮件内容已脱敏" width="280" data-n="readme-android-mail-management-screenshot" /> |
+
+选择服务商添加邮箱，也可以通过 HTTPS 链接导入加密配置；设置页显示版本号并支持调整邮件时间格式。
+
+| 添加邮箱 | 导入加密配置 | 设置与版本 |
+| --- | --- | --- |
+| <img src="docs/screenshots/android-add-mailbox.png" alt="Android 添加邮箱页，展示 QQ、163、126、Gmail 等服务商选项" width="280" data-n="readme-android-add-mailbox-screenshot" /> | <img src="docs/screenshots/android-config-import.png" alt="Android 加密配置导入页，展示 HTTPS 链接、AES-256-GCM 加密方式和解密密码输入栏" width="280" data-n="readme-android-config-import-screenshot" /> | <img src="docs/screenshots/android-settings.png" alt="Android 设置页，显示简信版本 1.0.0、时间格式选项和预览" width="280" data-n="readme-android-settings-screenshot" /> |
 
 ## 快速开始
 
