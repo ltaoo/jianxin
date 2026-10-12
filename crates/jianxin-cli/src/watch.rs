@@ -46,7 +46,9 @@ pub fn run(app: &App, selector: Option<&str>, options: Options) -> Result<()> {
             let result = poll_account(app, cfg, &mut baselined);
             let error = result.as_ref().err().map(ToString::to_string);
             jianxin_core::record_account_sync_status(app.config(), &account.id, error.as_deref());
-            if let Err(err) = result { eprintln!("watch {}: {err}", account.email); }
+            if let Err(err) = result {
+                eprintln!("watch {}: {err}", account.email);
+            }
         }
         deliver_pending(app, &accounts, &webhook, notify, &options)?;
         app.db().release_idle_memory()?;
@@ -58,6 +60,44 @@ fn accounts_to_watch(app: &App, selector: Option<&str>) -> Result<Vec<AccountCon
     match selector {
         Some(selector) => Ok(vec![app.resolve_account(Some(selector))?]),
         None => Ok(app.account_configs().to_vec()),
+    }
+}
+
+/// One polling cycle, reused by the desktop's in-process worker.
+#[derive(Default)]
+pub struct Poller {
+    baselined: HashMap<String, bool>,
+}
+
+impl Poller {
+    pub fn tick(&mut self, app: &App) -> Result<()> {
+        let accounts = accounts_to_watch(app, None)?;
+        for cfg in &accounts {
+            let account = cfg.to_account();
+            let result = poll_account(app, cfg, &mut self.baselined);
+            let error = result.as_ref().err().map(ToString::to_string);
+            jianxin_core::record_account_sync_status(app.config(), &account.id, error.as_deref());
+            if let Err(error) = result {
+                eprintln!("watch {}: {error}", account.email);
+            }
+        }
+        let options = Options {
+            interval: None,
+            webhook: None,
+            notify: true,
+            mcp: false,
+            include_body: false,
+            json: false,
+        };
+        deliver_pending(
+            app,
+            &accounts,
+            &app.config().general.watch.webhook,
+            true,
+            &options,
+        )?;
+        app.db().release_idle_memory()?;
+        Ok(())
     }
 }
 
@@ -137,7 +177,13 @@ fn deliver_pending(
             continue;
         };
         let payload = event_payload(app, cfg, &event, options.include_body)?;
-        if emit(&payload, webhook, notify, options, cfg.source_path.as_deref())? {
+        if emit(
+            &payload,
+            webhook,
+            notify,
+            options,
+            cfg.source_path.as_deref(),
+        )? {
             delivered.push(event.id);
         }
     }
@@ -185,7 +231,13 @@ fn event_payload(
     Ok(value)
 }
 
-fn emit(event: &Value, webhook: &Option<String>, notify: bool, options: &Options, config: Option<&std::path::Path>) -> Result<bool> {
+fn emit(
+    event: &Value,
+    webhook: &Option<String>,
+    notify: bool,
+    options: &Options,
+    config: Option<&std::path::Path>,
+) -> Result<bool> {
     if let Some(url) = webhook {
         post_webhook(url, event)?;
     }

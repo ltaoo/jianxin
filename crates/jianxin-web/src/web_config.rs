@@ -5,20 +5,32 @@ use anyhow::{bail, Context, Result};
 use jianxin_config::AccountConfig;
 use jianxin_core::App;
 use serde_json::{json, Value};
-use std::{collections::HashSet, io::Read, path::Path, time::{Duration, Instant}};
+use std::{
+    collections::HashSet,
+    io::Read,
+    path::Path,
+    time::{Duration, Instant},
+};
 
 const LIMIT: u64 = 2 * 1024 * 1024;
 
 fn read_json(reader: &mut dyn Read) -> Result<Value> {
     let mut bytes = Vec::new();
     reader.take(LIMIT + 1).read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > LIMIT { bail!("配置不能超过 2 MB"); }
+    if bytes.len() as u64 > LIMIT {
+        bail!("配置不能超过 2 MB");
+    }
     serde_json::from_slice(&bytes).context("配置内容不是有效 JSON")
 }
 
 fn parsed_accounts(value: &Value) -> Result<Vec<(usize, AccountConfig)>> {
-    let rows = value.get("accounts").and_then(Value::as_array).context("配置需要包含 accounts 数组")?;
-    if rows.is_empty() || rows.len() > 100 { bail!("支持 1 至 100 个邮箱"); }
+    let rows = value
+        .get("accounts")
+        .and_then(Value::as_array)
+        .context("配置需要包含 accounts 数组")?;
+    if rows.is_empty() || rows.len() > 100 {
+        bail!("支持 1 至 100 个邮箱");
+    }
     let mut seen = HashSet::new();
     let mut accounts = Vec::new();
     for (index, row) in rows.iter().enumerate() {
@@ -29,7 +41,9 @@ fn parsed_accounts(value: &Value) -> Result<Vec<(usize, AccountConfig)>> {
             }
         }
     }
-    if accounts.is_empty() { bail!("没有可导入的邮箱，请检查邮箱地址、认证信息和服务器配置"); }
+    if accounts.is_empty() {
+        bail!("没有可导入的邮箱，请检查邮箱地址、认证信息和服务器配置");
+    }
     Ok(accounts)
 }
 
@@ -44,10 +58,15 @@ pub(super) fn preview(app: &App, reader: &mut dyn Read) -> Reply {
                 warnings.push(format!("第 {} 个邮箱未导入：字段无效或邮箱重复", index + 1));
             }
         }
-        if value.get("general").is_some() { warnings.push("仅导入邮箱，保留当前桌面设置和数据目录。".into()); }
+        if value.get("general").is_some() {
+            warnings.push("仅导入邮箱，保留当前桌面设置和数据目录。".into());
+        }
         for (_, account) in &accounts {
             if account.needs_authorization() {
-                warnings.push(format!("{} 待授权，保存后点击邮箱状态图标完成 OAuth 登录。", account.email));
+                warnings.push(format!(
+                    "{} 待授权，保存后点击邮箱状态图标完成 OAuth 登录。",
+                    account.email
+                ));
             }
         }
         let rows: Vec<_> = accounts.into_iter().map(|(index, account)| json!({
@@ -60,33 +79,55 @@ pub(super) fn preview(app: &App, reader: &mut dyn Read) -> Reply {
     reply(result)
 }
 
-pub(super) fn oauth_settings(manager: &mut web_agent::Manager, path: &Path, reader: &mut dyn Read) -> Reply {
+pub(super) fn oauth_settings(
+    manager: &mut web_agent::Manager,
+    path: &Path,
+    reader: &mut dyn Read,
+) -> Reply {
     let result = (|| -> Result<Value> {
         let value = read_json(reader)?;
         let id = value["account"].as_str().context("请选择邮箱")?;
-        let client_id = value["client_id"].as_str().map(str::trim).filter(|id| !id.is_empty() && id.len() <= 256)
+        let client_id = value["client_id"]
+            .as_str()
+            .map(str::trim)
+            .filter(|id| !id.is_empty() && id.len() <= 256)
             .context("请填写 OAuth 应用 ID（Client ID）")?;
-        let endpoint = value["token_endpoint"].as_str().context("请填写 HTTPS 令牌端点")?;
+        let endpoint = value["token_endpoint"]
+            .as_str()
+            .context("请填写 HTTPS 令牌端点")?;
         let endpoint = validated_url(endpoint.trim())?;
         if !endpoint.path().ends_with("/token") || endpoint.query().is_some() {
             bail!("令牌端点需要以 /token 结尾，不要包含查询参数");
         }
-        let mut account = jianxin_config::AppConfig::load(path)?.accounts.into_iter()
-            .find(|account| account.to_account().id == id).context("邮箱不存在")?;
-        let jianxin_config::AuthConfig::OAuth2 { client_id: stored_id, token_endpoint, .. } = &mut account.auth else {
+        let mut account = jianxin_config::AppConfig::load(path)?
+            .accounts
+            .into_iter()
+            .find(|account| account.to_account().id == id)
+            .context("邮箱不存在")?;
+        let jianxin_config::AuthConfig::OAuth2 {
+            client_id: stored_id,
+            token_endpoint,
+            ..
+        } = &mut account.auth
+        else {
             bail!("此邮箱不使用 OAuth 登录");
         };
         *stored_id = Some(client_id.to_string());
         *token_endpoint = Some(endpoint.to_string());
         account.apply_oauth_defaults();
-        manager.import_accounts(path, vec![account])
+        manager
+            .import_accounts(path, vec![account])
             .map_err(|_| anyhow::anyhow!("授权设置保存失败，请检查文件权限或稍后重试"))?;
         Ok(json!({"saved":true}))
     })();
     reply(result)
 }
 
-pub(super) fn import(manager: &mut web_agent::Manager, path: &Path, reader: &mut dyn Read) -> Reply {
+pub(super) fn import(
+    manager: &mut web_agent::Manager,
+    path: &Path,
+    reader: &mut dyn Read,
+) -> Reply {
     let result = (|| -> Result<Value> {
         let value = read_json(reader)?;
         let accounts = parsed_accounts(&value)?;
@@ -94,10 +135,19 @@ pub(super) fn import(manager: &mut web_agent::Manager, path: &Path, reader: &mut
             bail!("选择的邮箱包含无效或重复配置，请重新预览");
         }
         let count = accounts.len();
-        manager.import_accounts(path, accounts.into_iter().map(|(_, account)| account).collect())
+        manager
+            .import_accounts(
+                path,
+                accounts.into_iter().map(|(_, account)| account).collect(),
+            )
             .map_err(|_| anyhow::anyhow!("配置保存失败，请检查文件权限或稍后重试"))?;
-        let daemon = match crate::daemon::restart_if_running(path, &manager.app().config().data_dir()) {
-            Ok(true) => "restarted", Ok(false) => "not_running", Err(_) => "failed",
+        let daemon = match manager
+            .runtime
+            .config_changed(path, &manager.app().config().data_dir())
+        {
+            Ok(true) => "restarted",
+            Ok(false) => "not_running",
+            Err(_) => "failed",
         };
         Ok(json!({"imported": count, "daemon": daemon}))
     })();
@@ -106,8 +156,12 @@ pub(super) fn import(manager: &mut web_agent::Manager, path: &Path, reader: &mut
 
 fn validated_url(value: &str) -> Result<ammonia::url::Url> {
     let url = ammonia::url::Url::parse(value).context("请输入完整 HTTPS URL")?;
-    if url.scheme() != "https" || url.host_str().is_none() || !url.username().is_empty()
-        || url.password().is_some() || url.fragment().is_some() {
+    if url.scheme() != "https"
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+    {
         bail!("请输入完整 HTTPS URL，不要包含用户名、密码或片段");
     }
     Ok(url)
@@ -115,29 +169,52 @@ fn validated_url(value: &str) -> Result<ammonia::url::Url> {
 
 fn download(value: &str) -> Result<String> {
     let mut target = validated_url(value)?;
-    let agent = ureq::AgentBuilder::new().redirects(0).https_only(true)
-        .timeout_connect(Duration::from_secs(30)).timeout_read(Duration::from_secs(30))
-        .timeout(Duration::from_secs(60)).build();
+    let agent = ureq::AgentBuilder::new()
+        .redirects(0)
+        .https_only(true)
+        .timeout_connect(Duration::from_secs(30))
+        .timeout_read(Duration::from_secs(30))
+        .timeout(Duration::from_secs(60))
+        .build();
     let deadline = Instant::now() + Duration::from_secs(60);
     for hop in 0..6 {
         let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() { bail!("配置下载超时，请重试"); }
-        let response = agent.get(target.as_str()).timeout(remaining).set("Cache-Control", "no-cache").call()
+        if remaining.is_zero() {
+            bail!("配置下载超时，请重试");
+        }
+        let response = agent
+            .get(target.as_str())
+            .timeout(remaining)
+            .set("Cache-Control", "no-cache")
+            .call()
             .map_err(|_| anyhow::anyhow!("下载失败，请检查网络、URL、文件权限和 HTTPS 证书"))?;
         if matches!(response.status(), 301 | 302 | 303 | 307 | 308) {
-            if hop == 5 { bail!("配置 URL 重定向次数过多"); }
+            if hop == 5 {
+                bail!("配置 URL 重定向次数过多");
+            }
             let next = target.join(response.header("Location").context("配置 URL 重定向无效")?)?;
             target = validated_url(next.as_str())?;
             continue;
         }
-        if !(200..300).contains(&response.status()) { bail!("下载失败，请检查 URL 和文件权限"); }
-        if response.header("Content-Length").and_then(|s| s.parse::<u64>().ok()).is_some_and(|n| n > LIMIT) {
+        if !(200..300).contains(&response.status()) {
+            bail!("下载失败，请检查 URL 和文件权限");
+        }
+        if response
+            .header("Content-Length")
+            .and_then(|s| s.parse::<u64>().ok())
+            .is_some_and(|n| n > LIMIT)
+        {
             bail!("加密配置不能超过 2 MB");
         }
         let mut data = Vec::new();
-        response.into_reader().take(LIMIT + 1).read_to_end(&mut data)
+        response
+            .into_reader()
+            .take(LIMIT + 1)
+            .read_to_end(&mut data)
             .map_err(|_| anyhow::anyhow!("配置下载失败，请重试"))?;
-        if data.len() as u64 > LIMIT { bail!("加密配置不能超过 2 MB"); }
+        if data.len() as u64 > LIMIT {
+            bail!("加密配置不能超过 2 MB");
+        }
         return String::from_utf8(data).context("密文不是有效 UTF-8 文件");
     }
     bail!("配置 URL 重定向次数过多")
@@ -165,17 +242,32 @@ mod tests {
     #[test]
     fn url_validation_and_bounded_input() {
         assert!(validated_url("https://example.com/config.enc?v=1").is_ok());
-        for url in ["http://example.com/a", "file:///tmp/a", "https://user:password@example.com/a", "https://example.com/a#key"] {
+        for url in [
+            "http://example.com/a",
+            "file:///tmp/a",
+            "https://user:password@example.com/a",
+            "https://example.com/a#key",
+        ] {
             assert!(validated_url(url).is_err());
         }
         assert!(read_json(&mut &vec![b' '; LIMIT as usize + 1][..]).is_err());
     }
     #[test]
     fn preview_validates_accounts_and_omits_credentials() {
-        let fixture: Value = serde_json::from_str(include_str!("../../../mobile/tests/fixtures/config.json")).unwrap();
-        let mut value: Value = serde_json::from_str(fixture["plaintext"].as_str().unwrap()).unwrap();
-        value["accounts"].as_array_mut().unwrap().push(json!({"email":"invalid"}));
-        let app = App::with_database(jianxin_config::AppConfig::default(), jianxin_store::Database::open_in_memory().unwrap()).unwrap();
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../mobile/tests/fixtures/config.json"))
+                .unwrap();
+        let mut value: Value =
+            serde_json::from_str(fixture["plaintext"].as_str().unwrap()).unwrap();
+        value["accounts"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"email":"invalid"}));
+        let app = App::with_database(
+            jianxin_config::AppConfig::default(),
+            jianxin_store::Database::open_in_memory().unwrap(),
+        )
+        .unwrap();
         let response = preview(&app, &mut value.to_string().as_bytes());
         assert_eq!(response.status, 200);
         assert!(!response.body.contains("sample-password"));
@@ -187,16 +279,34 @@ mod tests {
 
     #[test]
     fn preview_retains_passwordless_oauth_and_marks_it_pending() {
-        let app = App::with_database(jianxin_config::AppConfig::default(), jianxin_store::Database::open_in_memory().unwrap()).unwrap();
-        let response = preview(&app, &mut &br#"{"accounts":[
+        let app = App::with_database(
+            jianxin_config::AppConfig::default(),
+            jianxin_store::Database::open_in_memory().unwrap(),
+        )
+        .unwrap();
+        let response = preview(
+            &app,
+            &mut &br#"{"accounts":[
             {"email":"pending@outlook.com","auth":{"type":"oauth2"}},
             {"email":"other@example.com","auth":{"type":"o_auth2"}},
             {"email":"password@example.com","auth":{"type":"password"}}
-        ]}"#[..]);
+        ]}"#[..],
+        );
         assert_eq!(response.status, 200);
         let result: Value = serde_json::from_str(&response.body).unwrap();
         assert_eq!(result["accounts"].as_array().unwrap().len(), 2);
-        assert!(result["accounts"].as_array().unwrap().iter().all(|account| account["needs_authorization"] == true));
-        assert!(result["warnings"].as_array().unwrap().iter().any(|warning| warning.as_str().unwrap().contains("pending@outlook.com 待授权")));
+        assert!(result["accounts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|account| account["needs_authorization"] == true));
+        assert!(result["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning
+                .as_str()
+                .unwrap()
+                .contains("pending@outlook.com 待授权")));
     }
 }

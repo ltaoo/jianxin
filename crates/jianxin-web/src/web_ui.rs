@@ -36,8 +36,12 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
             "outlook.svg" => include_str!("../../../assets/mail-providers/svg-exact/outlook.svg"),
             "qq.svg" => include_str!("../../../assets/mail-providers/svg-exact/qq.svg"),
             "foxmail.svg" => include_str!("../../../assets/mail-providers/svg-exact/foxmail.svg"),
-            "netease163.svg" => include_str!("../../../assets/mail-providers/svg-exact/netease163.svg"),
-            "netease126.svg" => include_str!("../../../assets/mail-providers/svg-exact/netease126.svg"),
+            "netease163.svg" => {
+                include_str!("../../../assets/mail-providers/svg-exact/netease163.svg")
+            }
+            "netease126.svg" => {
+                include_str!("../../../assets/mail-providers/svg-exact/netease126.svg")
+            }
             "yeah.svg" => include_str!("../../../assets/mail-providers/svg-exact/yeah.svg"),
             "aliyun.svg" => include_str!("../../../assets/mail-providers/svg-exact/aliyun.svg"),
             "sina.svg" => include_str!("../../../assets/mail-providers/svg-exact/sina.svg"),
@@ -63,7 +67,11 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
                 !folders.is_empty(),
             );
             let oauth_config = match &cfg.auth {
-                jianxin_config::AuthConfig::OAuth2 { client_id, token_endpoint, .. } => Some(serde_json::json!({
+                jianxin_config::AuthConfig::OAuth2 {
+                    client_id,
+                    token_endpoint,
+                    ..
+                } => Some(serde_json::json!({
                     "client_id":client_id.as_deref().unwrap_or(""), "token_endpoint":token_endpoint.as_deref().unwrap_or(""),
                     "needs_setup":client_id.as_ref().is_none_or(|id| id.trim().is_empty())
                         || token_endpoint.as_ref().is_none_or(|endpoint| endpoint.trim().is_empty()),
@@ -91,8 +99,14 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
     let query: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
     if path == "api/contacts" {
         let search = query.get("q").map(String::as_str).unwrap_or("");
-        if search.len() > 256 { bail!("contact query too long"); }
-        let allowed = app.account_configs().iter().map(|cfg| cfg.to_account().id).collect::<Vec<_>>();
+        if search.len() > 256 {
+            bail!("contact query too long");
+        }
+        let allowed = app
+            .account_configs()
+            .iter()
+            .map(|cfg| cfg.to_account().id)
+            .collect::<Vec<_>>();
         let contacts = reader_repo::contacts(&app.db().lock(), &allowed, search)?;
         return Ok(Reply::json(200, serde_json::json!({"contacts":contacts})));
     }
@@ -174,10 +188,23 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
             bail!("unknown account");
         }
         let folder_id = query.get("folder").map(String::as_str).unwrap_or("");
-        if !folder_id.is_empty() && !app.mail().folders(&thread.account_id)?.iter().any(|folder| folder.id == folder_id) {
+        if !folder_id.is_empty()
+            && !app
+                .mail()
+                .folders(&thread.account_id)?
+                .iter()
+                .any(|folder| folder.id == folder_id)
+        {
             bail!("unknown folder");
         }
-        let mut messages = reader_repo::headers_in_folder(&app.db().lock(), id, "", folder_id, PAGE_SIZE + 1, page * PAGE_SIZE)?;
+        let mut messages = reader_repo::headers_in_folder(
+            &app.db().lock(),
+            id,
+            "",
+            folder_id,
+            PAGE_SIZE + 1,
+            page * PAGE_SIZE,
+        )?;
         reader_repo::scope_thread(&app.db().lock(), &mut thread, folder_id)?;
         let more = messages.len() > PAGE_SIZE as usize;
         messages.truncate(PAGE_SIZE as usize);
@@ -186,20 +213,36 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
             serde_json::json!({"thread":thread,"messages":messages,"more":more,"page":page}),
         ));
     }
-    if let Some(id) = path.strip_prefix("api/message/").and_then(|value| value.strip_suffix("/metadata")) {
-        if !identifier(id) { bail!("invalid message"); }
+    if let Some(id) = path
+        .strip_prefix("api/message/")
+        .and_then(|value| value.strip_suffix("/metadata"))
+    {
+        if !identifier(id) {
+            bail!("invalid message");
+        }
         let message = app.mail().get(id)?;
-        let cfg = app.account_configs().iter().find(|cfg| cfg.to_account().id == message.account_id).context("unknown account")?;
-        let folder = app.mail().folders(&message.account_id)?.into_iter().find(|folder| folder.id == message.folder_id);
-        return Ok(Reply::json(200, serde_json::json!({
-            "id":message.id,"thread_id":message.thread_id,"remote_id":message.remote_id,
-            "message_id_header":message.message_id_header,"immutable_id":message.immutable_id,
-            "account_id":message.account_id,"account_email":cfg.email,"provider":cfg.to_account().provider,
-            "folder_id":message.folder_id,"folder_name":folder.map(|folder|folder.name),
-            "in_reply_to":message.in_reply_to,"references":message.references,
-            "server_thread_key":message.server_thread_key,"thread_index_root":message.thread_index_root,
-            "from":message.from,"to":message.to,"cc":message.cc,"reply_to":message.reply_to,"sent_at":message.sent_at,"received_at":message.received_at,"size":message.size
-        })));
+        let cfg = app
+            .account_configs()
+            .iter()
+            .find(|cfg| cfg.to_account().id == message.account_id)
+            .context("unknown account")?;
+        let folder = app
+            .mail()
+            .folders(&message.account_id)?
+            .into_iter()
+            .find(|folder| folder.id == message.folder_id);
+        return Ok(Reply::json(
+            200,
+            serde_json::json!({
+                "id":message.id,"thread_id":message.thread_id,"remote_id":message.remote_id,
+                "message_id_header":message.message_id_header,"immutable_id":message.immutable_id,
+                "account_id":message.account_id,"account_email":cfg.email,"provider":cfg.to_account().provider,
+                "folder_id":message.folder_id,"folder_name":folder.map(|folder|folder.name),
+                "in_reply_to":message.in_reply_to,"references":message.references,
+                "server_thread_key":message.server_thread_key,"thread_index_root":message.thread_index_root,
+                "from":message.from,"to":message.to,"cc":message.cc,"reply_to":message.reply_to,"sent_at":message.sent_at,"received_at":message.received_at,"size":message.size
+            }),
+        ));
     }
     if let Some(id) = path.strip_prefix("api/message/") {
         if !identifier(id) {
@@ -245,16 +288,25 @@ mod tests {
     #[test]
     fn folder_thread_reading_excludes_sent_replies_but_full_conversations_keep_them() {
         let (app, root) = super::super::tests::fixture();
-        let sent = jianxin_domain::Folder::new(&root.account_id, "Sent", "Sent", jianxin_domain::FolderKind::Sent);
+        let sent = jianxin_domain::Folder::new(
+            &root.account_id,
+            "Sent",
+            "Sent",
+            jianxin_domain::FolderKind::Sent,
+        );
         let mut reply = root.clone();
-        reply.id = "outgoing-reply".into(); reply.remote_id = "2".into(); reply.folder_id = sent.id.clone();
-        reply.message_id_header = Some("<reply@example.com>".into()); reply.is_read = true;
+        reply.id = "outgoing-reply".into();
+        reply.remote_id = "2".into();
+        reply.folder_id = sent.id.clone();
+        reply.message_id_header = Some("<reply@example.com>".into());
+        reply.is_read = true;
         reply.from = vec![jianxin_domain::Address::new("test@example.com")];
         jianxin_store::folder_repo::upsert_many(&app.db().lock(), &[sent.clone()]).unwrap();
         jianxin_store::message_repo::upsert_many(&app.db().lock(), &[reply.clone()]).unwrap();
         let thread_id = root.thread_id.as_ref().unwrap();
         for (folder, expected_id) in [(&root.folder_id, &root.id), (&sent.id, &reply.id)] {
-            let response = render(&app, "", &format!("api/thread/{thread_id}?folder={folder}")).unwrap();
+            let response =
+                render(&app, "", &format!("api/thread/{thread_id}?folder={folder}")).unwrap();
             let value: serde_json::Value = serde_json::from_str(&response.body).unwrap();
             assert_eq!(value["messages"].as_array().unwrap().len(), 1);
             assert_eq!(value["messages"][0]["id"], *expected_id);
@@ -269,7 +321,10 @@ mod tests {
     #[test]
     fn metadata_exposes_identity_and_sender_without_bodies_credentials_or_writes() {
         let (app, mut message) = super::super::tests::fixture();
-        message.from = vec![jianxin_domain::Address::with_name("Sender Name", "sender@example.com")];
+        message.from = vec![jianxin_domain::Address::with_name(
+            "Sender Name",
+            "sender@example.com",
+        )];
         message.reply_to = vec![jianxin_domain::Address::new("reply@example.com")];
         message.to = vec![jianxin_domain::Address::new("test@example.com")];
         message.cc = vec![jianxin_domain::Address::new("copy@example.com")];
@@ -290,7 +345,13 @@ mod tests {
         assert_eq!(value["reply_to"][0]["email"], "reply@example.com");
         assert_eq!(value["to"][0]["email"], "test@example.com");
         assert_eq!(value["cc"][0]["email"], "copy@example.com");
-        for forbidden in ["HTML body", "html_body", "text_body", "password", "private-provider-data"] {
+        for forbidden in [
+            "HTML body",
+            "html_body",
+            "text_body",
+            "password",
+            "private-provider-data",
+        ] {
             assert!(!response.body.contains(forbidden));
         }
         assert!(!app.mail().get(&message.id).unwrap().is_read);
@@ -315,14 +376,41 @@ mod tests {
         assert!(script.body.contains("Timeless"));
         assert_eq!(script.content_type, "text/javascript; charset=utf-8");
         assert!(render(&app, "/secret", "assets/../../config.json").is_err());
-        for platform in ["gmail", "outlook", "qq", "foxmail", "netease163", "netease126", "yeah", "aliyun", "sina", "mail139", "icloud", "zoho", "yahoo", "fastmail", "proton", "tencent"] {
-            let icon = render(&app, "/secret", &format!("assets/mail-providers/{platform}.svg")).unwrap();
+        for platform in [
+            "gmail",
+            "outlook",
+            "qq",
+            "foxmail",
+            "netease163",
+            "netease126",
+            "yeah",
+            "aliyun",
+            "sina",
+            "mail139",
+            "icloud",
+            "zoho",
+            "yahoo",
+            "fastmail",
+            "proton",
+            "tencent",
+        ] {
+            let icon = render(
+                &app,
+                "/secret",
+                &format!("assets/mail-providers/{platform}.svg"),
+            )
+            .unwrap();
             assert_eq!(icon.content_type, "image/svg+xml; charset=utf-8");
             assert!(icon.body.starts_with("<svg"));
             assert!(!icon.body.contains("<image"));
         }
         assert!(render(&app, "/secret", "assets/mail-providers/unknown.svg").is_err());
-        assert!(render(&app, "/secret", "assets/mail-providers/../../../config.json").is_err());
+        assert!(render(
+            &app,
+            "/secret",
+            "assets/mail-providers/../../../config.json"
+        )
+        .is_err());
     }
     #[test]
     fn mailbox_api_reads_shared_status_without_exposing_raw_errors_or_tui_shortcuts() {

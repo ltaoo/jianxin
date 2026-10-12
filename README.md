@@ -2,6 +2,8 @@
 
 简信是支持多个邮箱和邮件服务商的邮件客户端，提供 CLI、TUI、本地 Web 阅读器、桌面托盘，以及独立的 iOS / Android 原生应用。目前通过 IMAP / SMTP 连接 Gmail、Outlook、QQ、163、阿里云和通用邮箱。
 
+桌面分发使用单个原生托盘 + Web Server 程序，不包含 CLI/TUI 或 GPUI。独立的 CLI/TUI 仍可按需单独构建。
+
 桌面各入口共用配置与本地 SQLite 数据库，可跨邮箱浏览、搜索和聚合会话；移动端直接连接邮箱服务器，支持本地缓存、草稿、附件和加密配置导入。
 
 ## 快速开始
@@ -38,7 +40,7 @@ Windows 使用 `target\release\jianxin.exe`。省略 `--config` 时，CLI 使用
 | --- | --- | --- |
 | CLI / TUI | 收发邮件、同步、搜索与会话管理 | [CLI](docs/cli.md)、[TUI](docs/tui.md) |
 | Web PC | 本地邮件阅读、回复、配置导入和邮件助手 | [使用说明](docs/web.md)、[构建与开发](webpc/README.md) |
-| 桌面托盘 | 未读面板、后台收信和系统通知 | [桌面托盘](docs/desktop-tray.md)、[系统通知](docs/desktop-notifications.md) |
+| 桌面托盘 | 最近 10 封未读菜单、内置 Web 服务、后台收信和通知 | [桌面托盘](docs/desktop-tray.md)、[系统通知](docs/desktop-notifications.md) |
 | Android / iOS | 独立原生客户端，直接连接邮箱 | [移动端构建与使用](mobile/README.md) |
 | MCP | 向 Agent 提供邮件工具 | [Agent 接入](docs/agent-usage.md) |
 
@@ -67,7 +69,8 @@ assets/     应用图标与邮件服务商图形
 ## 非浏览器检查
 
 ```sh
-cargo test --locked -p jianxin-cli -p jianxin-desktop
+cargo test --locked -p jianxin-web -p jianxin-cli -p jianxin-desktop
+node --test crates/jianxin-web/src/web-reader.test.cjs
 node --test webpc/tests/*.test.mjs
 node mobile/tests/config_crypto.test.mjs
 mobile/tools/test_swift.sh

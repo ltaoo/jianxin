@@ -10,6 +10,7 @@ members = [
   "crates/jianxin-tui",
   "crates/jianxin-cli",
   "crates/jianxin-desktop",
+  "crates/jianxin-web",
 ]
 
 [workspace.package]
@@ -30,6 +31,7 @@ jianxin-store = { path = "crates/jianxin-store" }
 jianxin-core = { path = "crates/jianxin-core" }
 jianxin-agent = { path = "crates/jianxin-agent" }
 jianxin-tui = { path = "crates/jianxin-tui" }
+jianxin-web = { path = "crates/jianxin-web" }
 
 anyhow = "1"
 thiserror = "2"

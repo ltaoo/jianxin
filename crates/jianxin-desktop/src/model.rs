@@ -1,15 +1,12 @@
 use anyhow::Result;
-use chrono::{Local, TimeZone};
 use jianxin_core::App;
 
-pub const LIST_LIMIT: u32 = 30;
+pub const LIST_LIMIT: u32 = 10;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MailRow {
     pub id: String,
-    pub account: String,
     pub subject: String,
-    pub time: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -21,33 +18,18 @@ pub struct Snapshot {
 }
 
 pub fn load_snapshot(app: &App) -> Result<Snapshot> {
-    let accounts = app.accounts()?;
     let total = app.mail().count_all_unread()?;
     let rows = app
         .mail()
         .list_all(LIST_LIMIT, 0, true)?
         .into_iter()
-        .map(|message| {
-            let account = accounts
-                .iter()
-                .find(|account| account.id == message.account_id)
-                .map(|account| account.email.clone())
-                .unwrap_or_else(|| "未知邮箱".into());
-            MailRow {
-                time: message
-                    .sent_at
-                    .or(message.received_at)
-                    .and_then(|timestamp| Local.timestamp_opt(timestamp, 0).single())
-                    .map(|time| time.format("%m-%d %H:%M").to_string())
-                    .unwrap_or_else(|| "时间未知".into()),
-                id: message.id,
-                account,
-                subject: if message.subject.trim().is_empty() {
-                    "（无主题）".into()
-                } else {
-                    message.subject
-                },
-            }
+        .map(|message| MailRow {
+            id: message.id,
+            subject: if message.subject.trim().is_empty() {
+                "（无主题）".into()
+            } else {
+                message.subject
+            },
         })
         .collect();
     Ok(Snapshot {
@@ -117,7 +99,6 @@ mod tests {
         assert_eq!(snapshot.total, 40);
         assert_eq!(snapshot.rows.len(), LIST_LIMIT as usize);
         assert_eq!(snapshot.rows[0].id, "1-19");
-        assert_eq!(snapshot.rows[0].account, accounts[1].email);
         assert!(!snapshot.rows.iter().any(|row| row.id == "copy"));
         assert_eq!(app.mail().count_all_unread().unwrap(), 40);
     }

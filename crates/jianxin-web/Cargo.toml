@@ -1,0 +1,24 @@
+[package]
+name = "jianxin-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Embedded Jianxin Web reader and loopback HTTP service"
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+chrono.workspace = true
+jianxin-agent.workspace = true
+jianxin-config.workspace = true
+jianxin-core.workspace = true
+jianxin-domain.workspace = true
+jianxin-provider.workspace = true
+jianxin-store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ureq.workspace = true
+uuid.workspace = true
+ammonia = "4.2"
+tiny_http = "0.12"
+subtle = "2.6"

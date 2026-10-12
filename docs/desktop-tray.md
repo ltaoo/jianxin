@@ -1,34 +1,41 @@
-# 三端托盘与未读邮件面板
+# 原生托盘与内置 Web 阅读器
 
-桌面入口是 `jianxin-desktop`，由 GPUI Kit 渲染同一套 Rust 面板，`tray-icon` 接入系统托盘。
-与 CLI、TUI、Web 共用配置和 SQLite，默认启动现有 `jianxin daemon` 后台收信。
+桌面入口是 `jianxin-desktop`，一个 Rust 程序内运行原生托盘、本机 Web Server 和后台收信线程。
+分发包不包含独立 CLI / TUI 程序，也不依赖 GPUI Kit、GPU 渲染器或托盘浮层。
+邮件引擎、配置和 SQLite 仍与独立构建的 CLI 共用，Web 后端位于 `crates/jianxin-web`。
 
-- 直接运行托盘程序默认只显示托盘图标，不打开浮层；左键点击托盘切换面板，右键菜单提供打开阅读器、刷新、配置加密和退出。
-- 跨邮箱显示最新 30 封未读邮件，包含主题、本地时间和完整邮箱地址；邮件行不显示悬停提示，左键点击不跳转。
-- 每 5 秒读取本地数据库，沿用现有邮件去重与删除过滤规则；刷新不会强制远端同步。
-- 每封邮件支持右键菜单“在浏览器中打开”，定位对应邮箱、文件夹和邮件正文。
-- 面板打开和刷新不修改已读状态。右键选择“在浏览器中打开”才启动已有 Web 阅读器，由阅读器按现有规则同步已读。
-- Esc、关闭按钮或窗口失焦关闭面板，后台收信继续运行。
-- 浮层右下角“退出”按钮先停止后台收信，再关闭桌面应用；停止失败时保留应用并提示重试。托盘右键菜单“退出应用”使用相同的完全退出逻辑。
-- 浮层跟随系统浅色/暗色主题；启动、重新打开及系统外观变化时自动同步，按钮、提示和滚动条一并适配。
-- macOS 菜单栏使用随系统深浅色自动适配的原生信封图标，并显示未读总数；三端托盘提示显示总数。
-- 每个数据目录只允许一个托盘实例；重复启动保持当前面板状态，显式传入 `--show` 才打开已有实例的面板。
-- 打开阅读器由独立线程处理，不等待后台收信启动或未读列表刷新；重复打开会复用仍在运行的 Web 服务。服务空闲 30 分钟退出后，下次打开自动重新启动。Windows 直接调用默认浏览器接口打开地址；启动失败时在面板展示错误。
+## 托盘菜单
+
+- 左键或右键点击托盘展开系统原生菜单。Linux 通过 StatusNotifier 的 `IsMenu` 属性请求托盘 host 显示菜单。
+- 跨邮箱显示最近 **10 封未读邮件标题**，按邮件时间从新到旧排列；沿用数据库中的副本去重与删除过滤。
+- 菜单只显示标题；空标题显示“（无主题）”，换行合并为空格，超过 80 字截断为省略号。邮件总未读数不受 10 条上限限制。
+- 点击标题打开现有 Web 阅读器，定位对应邮箱、文件夹和邮件正文。同名标题按邮件 ID 分别路由。
+- 展开或刷新菜单不修改已读状态；进入阅读器后，沿用 Web 阅读器的已读同步规则。
+- 菜单提供“打开邮件阅读器”“立即收信 / 刷新菜单”和“退出应用”。无未读邮件、首次加载及错误均有状态提示。
+- 每 5 秒读取本地未读缓存；手动刷新也触发内置收信。默认按配置的 `watch.interval_secs` 后台同步。
+- 原生菜单随系统主题显示；macOS 菜单栏使用原生信封图标和未读计数。
+- 退出结束托盘、Web 服务和本进程收信。关闭浏览器标签页不会停止收信；阅读器保持一个服务，重复打开复用地址。
+- 退出不以停止收信成功为条件。点击退出即开始清理；网络、数据库或托盘析构阻塞时，2 秒内强制结束本进程。macOS 的 Cmd-Q / 系统退出直接通知它拥有的桌面进程，同样有 2 秒强制退出兜底；应用包运行中被移动或删除也不影响退出。
+- 每个数据目录只运行一个桌面实例；重复启动默认不打开阅读器，`--show` 和通知点击会转发给现有实例。
 
 ## 构建与启动
 
-使用 Rust 1.92+ 和 Node.js 18+。首次构建前在仓库根目录运行 `npm ci --prefix webpc`；Cargo 会自动构建并嵌入 Web 资源。纯 CLI 仍可单独构建，不需要 GPUI。
+需要 Rust 1.92+、Node.js 18+ 和平台原生编译工具。首次运行：
 
 ```sh
-cargo build --locked -p jianxin-cli -p jianxin-desktop
-target/debug/jianxin tray
-target/debug/jianxin tray --show
-target/debug/jianxin --config /绝对路径/config.json tray --no-daemon
+npm ci --prefix webpc
+cargo build --locked --release -p jianxin-desktop
+target/release/jianxin-desktop
 ```
 
-`--no-daemon` 适合已有 watcher 或只查看离线缓存。没有配置时会创建空配置并正常显示托盘；没有邮箱时不启动收信，也不弹出配置提醒。
-独立桌面程序也支持 `--config`、`--show`、`--no-daemon`，以及 `--cli <路径>` 指定配套 CLI。
-程序默认查找同目录的 CLI、macOS 应用 Resources 中的 CLI，最后查找 PATH。
+Cargo 自动构建并内嵌 Web 资源。桌面程序支持 `--config <路径>`、`--show` 和 `--no-daemon`；
+后者关闭本实例的收信，仅查看本地缓存。通知路由使用内部的 `--account`、`--open-message` 和 `--notification-open` 参数。
+桌面程序不提供 `sync`、`watch`、`agent`、`tui` 等 CLI 子命令。
+
+配置优先使用 `--config`、`JIANXIN_CONFIG`、桌面可执行文件同目录已有的 `config.json`，最后使用默认配置路径。
+没有配置时创建空配置并显示空托盘，不要求先运行 CLI。
+在菜单中打开阅读器后，可以导入邮箱配置并完成 OAuth 登录；配置更改会自动加载到托盘和内置收信线程。
+原来的原生“配置加密”窗口已移除，现有 Web 密文导入功能保留。
 
 ### macOS
 
@@ -36,78 +43,51 @@ target/debug/jianxin --config /绝对路径/config.json tray --no-daemon
 bash scripts/build-macos-app.sh
 ```
 
-构建产物是 `target/macos/Jianxin.app`。手动打开后显示托盘和面板，原 Swift 包装程序继续负责系统通知授权与通知点击。
-安装到用户 Applications 目录使用已有 `--install` 选项。浮层“退出”会停止 launchd 后台收信。
+产物是 `target/macos/Jianxin.app`，只包含桌面可执行文件、图标和小型 Swift 通知包装器。
+手动打开后显示托盘，不自动打开浏览器。再次打开 App 会打开 Web 阅读器。
+系统通知点击直接转发邮件目标到桌面程序；冷启动时也可定位原邮件，无需独立 CLI 或 Web 子进程。
+通知包装器随它启动的桌面程序退出。
+
+`bash scripts/build-macos-app.sh --install` 可安装到用户 Applications 目录。
+首次正常启动会申请系统通知权限。旧版相同配置的 launchd 收信服务会停止，原 plist 移至数据目录的 `legacy-mail-daemon-*.plist`，以后由桌面进程收信。
 
 ### Windows
 
-在带 MSVC 工具链的 PowerShell 中执行：
+在 MSVC 工具链的 PowerShell 中执行：
 
 ```powershell
 .\scripts\build-desktop.ps1
-.\target\release\jianxin.exe tray
+.\target\release\jianxin-desktop.exe
 ```
 
-分发时把 `jianxin.exe` 和 `jianxin-desktop.exe` 放在同一目录。桌面程序不创建控制台窗口。
-双击任一 exe 均可启动托盘，默认不打开浮层。在已有终端运行无参数的 `jianxin` 仍进入 TUI。
-配置路径优先使用 `--config`、`JIANXIN_CONFIG`，其次使用桌面 exe 同目录已有的 `config.json`，最后使用 `~/.config/jianxin/config.json`。
-配置不存在时自动新建空配置；配置损坏等启动错误会显示 Windows 对话框，并写入 `%TEMP%/jianxin-startup-error.log`。
-两个 exe 均内嵌简信 Logo；运行时托盘使用预先缩小的 32px 图标，原始高分辨率 Logo 不打入桌面程序。
-Release 构建采用体积优化、Thin LTO、单代码生成单元，移除符号和调试信息，并使用 `panic = "abort"`。
-发生 Rust panic 时进程直接退出；普通邮件、配置和网络错误仍沿用现有错误处理。
-构建脚本同时生成 `target/release/jianxin-windows.zip`，只包含两个 exe，无需附带源代码、调试文件或原始图标。
-
-### Web 导入邮箱配置
-
-阅读器左侧提供“导入邮箱配置”按钮。
-支持本地密文文件和 HTTPS URL，最大 2 MB。选择与安卓端相同的 AES-256-GCM、AES-128-GCM 或旧版 JSON，输入解密密钥，再点击“读取并解密”。
-兼容 `mobile/tools/config_crypto.mjs` 生成的文件。密钥只用于当前浏览器的 Web Crypto 解密，不会发给服务器或保存到浏览器存储。
-预览后勾选要保存的邮箱：添加新邮箱，更新同身份已有邮箱，保留未选账号和当前 `general` 设置。无效或重复账号在预览中提示。
-OAuth 邮箱即使没有密码、访问令牌或刷新令牌也可导入，预览标记“待授权”。保存后立即显示“等待 OAuth 登录”，点击邮箱状态图标手动授权。
-Outlook 自动采用与安卓相同的 Microsoft 令牌端点和 IMAP/SMTP 权限。缺少 Client ID 等授权应用信息时，可在邮箱状态面板填写并保存；保存设置不会自动开始登录。
-配置保存后 Web 邮箱列表和运行中的托盘自动更新；已有收信后台会重启加载新配置。初次添加邮箱后，正常运行的托盘会启动收信。
-密钥错误、下载失败或文件损坏不会修改当前配置。本地文件导入不联网；URL 由本机服务下载，支持 HTTPS 重定向，不允许降级到 HTTP。
+只分发 `jianxin-desktop.exe`，构建脚本生成仅包含此文件的 `target/release/jianxin-windows.zip`。
+双击启动托盘，不创建控制台窗口。启动错误会显示系统对话框并写入 `%TEMP%/jianxin-startup-error.log`。
+系统 Toast 通过用户级 `jianxin://` 协议转发给同一桌面程序，通知中心的历史通知也可定位邮件。
 
 ### Linux
 
 Ubuntu/Debian 构建依赖：
 
 ```sh
-sudo apt-get install build-essential pkg-config clang libclang-dev libssl-dev libfontconfig1-dev libfreetype6-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev libxcb1-dev
+sudo apt-get install build-essential pkg-config libssl-dev
 bash scripts/build-desktop.sh
-target/release/jianxin tray
+target/release/jianxin-desktop
 ```
 
-托盘采用 KSNI / StatusNotifierItem，通过会话 D-Bus 工作，不需要另开 GTK 事件循环。
-桌面环境需要提供 StatusNotifier host；GNOME 通常需要相应托盘扩展。可选的桌面入口模板在
-`platform/linux/jianxin-desktop.desktop`；安装时需要将二进制加入 PATH，并安装已有简信图标。
-
-KSNI 不提供托盘图标矩形，因此 Linux 使用屏幕右上方的备用位置；Wayland 最终位置由 compositor 决定。
-没有托盘 host 时，可运行 `jianxin tray --show` 查看面板，窗口关闭后需再次通过该命令打开。
-
-## 配置加密
-
-在托盘右键菜单或未读邮件浮层点击“配置加密”，打开原生 GPUI Kit 窗口。
-页面自动显示桌面端当前使用的 `config.json` 路径，包括启动时通过 `--config` 指定的文件。
-输入加密密钥后点击“生成密文”，也可在密钥输入框按 Enter。每次生成都会重新读取文件，
-在后台完成加密；密钥不会保存到磁盘。窗口失焦仍然保留，重复打开会激活同一窗口，关闭后再次打开会清空表单。
-
-生成成功后可以查看、选择和复制完整的 Base64 密文。将密文保存为文本文件并上传到 CDN，
-手机通过“邮箱 → 从 URL 导入加密配置”填写 HTTPS 地址、选择 **AES-256-GCM**，并输入相同密钥。
-格式与 `mobile/tools/config_crypto.mjs` 默认输出一致，桌面工具无需 Node.js。
-手机仅导入字符串账号凭据，不能读取电脑上的 `env`、`file`、`keychain` 等引用；这些配置需要先按
-[mobile 导入说明](../mobile/README.md#从-cdn-导入加密-configjson)调整。
-
-页面仅显示配置路径和密文。修改密钥或重新生成会清除上一次结果，生成失败时显示错误并可重试。
+托盘使用 KSNI / StatusNotifierItem，会话 D-Bus 和系统托盘 host 负责显示菜单；不需要 GTK、Wayland、Vulkan 或 GPUI 的图形开发库。
+GNOME 通常需要托盘扩展。桌面入口模板是 `platform/linux/jianxin-desktop.desktop`。
 
 ## 验证
 
-`cargo test -p jianxin-desktop` 覆盖跨邮箱未读列表、时间排序、分页上限、文件夹副本去重、只读行为、窗口边界定位，以及 mobile 加密向量互通、错误密钥/密文篡改、配置校验、随机 nonce 和当前配置重读。
-`.github/workflows/desktop.yml` 在三个系统分别编译并运行非图形测试。
+```sh
+cargo test --locked -p jianxin-web -p jianxin-desktop -p jianxin-cli
+node --test crates/jianxin-web/src/web-reader.test.cjs
+npm test --prefix webpc
+```
 
-手动检查各系统的托盘点击、右键菜单、Esc / 失焦关闭、重复启动、缩放与多显示器定位，以及同步后列表更新。
-点击邮件后检查阅读器是否定位到正确邮件和邮箱。本项目不自动调用或操作浏览器。
-配置加密需手动检查两个入口、路径、密钥遮蔽、Enter/按钮生成、复制、错误重试、关闭/重新打开和浅色/暗色主题；复制密文后可在手机中手动验证导入。
+测试覆盖跨邮箱排序、10 条上限、副本去重、只读菜单、同名标题路由、深链接、单实例转发、通知目标、嵌入式 HTTP 服务启动/退出及现有 Web 功能。
+本项目不调用或自动操作浏览器。
 
-macOS 启动后会在数据目录写入 `desktop-tray-status.json`，记录进程、原生菜单栏项可见状态、图标和位置，用于排查托盘不显示；不包含邮件内容。
-Windows 也写入同名文件，记录进程、托盘创建状态、浮层状态和图标位置。Windows 可能把新图标放入任务栏的隐藏图标区域。
+手动验证：点击托盘菜单、标题打开对应邮件、无未读时的空状态、同步后的菜单更新、系统主题、重复启动、通知点击，以及退出后不再收信且 Web 地址停止响应。
+macOS / Windows 在数据目录写入 `desktop-tray-status.json` 供排查托盘可见性。
+仅验证 HTTP 时，可设置 `JIANXIN_DESKTOP_HEADLESS=1` 并使用临时空邮箱配置；程序输出回环地址，不初始化托盘或打开浏览器。

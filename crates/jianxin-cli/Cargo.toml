@@ -19,6 +19,7 @@ jianxin-domain = { workspace = true }
 jianxin-provider = { workspace = true }
 jianxin-store = { workspace = true }
 jianxin-tui = { workspace = true }
+jianxin-web.workspace = true
 
 anyhow.workspace = true
 base64.workspace = true
@@ -33,8 +34,6 @@ tracing-subscriber.workspace = true
 ureq.workspace = true
 uuid.workspace = true
 ammonia = "4.2"
-tiny_http = "0.12"
-subtle = "2.6"
 
 [build-dependencies]
 embed-resource.workspace = true

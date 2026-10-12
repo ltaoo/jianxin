@@ -1,7 +1,7 @@
 {
   "schema": "design.v1",
   "name": "jianxin-jxui",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "status": "evolve",
   "updated_at": "2026-10-12",
   "agent": {
@@ -327,6 +327,10 @@
       "height": "{tokens.layout.composeHeight}",
       "backgroundColor": "{tokens.color.canvas}",
       "behavior": "Drag title bar or use arrow keys; native desktop resize; mobile viewport fit. Preserve draft during mail navigation, confirm discard, validate recipient and attachment limits, and use the durable outbox for send. Automatically inherit Re: subject in the title; hide the subject editor until explicit edit. Minimize and maximize preserve the draft."
+    },
+    "NativeTrayMenu": {
+      "when": "Desktop tray left/right click; system-native menu follows OS typography, colors, spacing, focus and theme.",
+      "behavior": "Show the latest 10 real unread mail subjects in descending time order, global unread total, empty/loading/error labels and reader/refresh/quit actions. Mail clicks route by local ID to the owning account and folder. Opening the menu does not mark mail read. Normalize control characters and bound long subjects. Do not create a GPUI popup."
     }
   },
   "patterns": {
@@ -356,7 +360,7 @@
       ]
     },
     {
-      "path": "crates/jianxin-cli/src/web.css",
+      "path": "crates/jianxin-web/src/web.css",
       "purpose": "Existing CSS approach and reader behaviors"
     },
     {
@@ -372,8 +376,8 @@
       "purpose": "Official Timeless icon definitions used through the framework Icon primitive"
     },
     {
-      "path": "crates/jianxin-desktop/src/theme.rs",
-      "purpose": "Native GPUI theme consumes the same design tokens at build time"
+      "path": "crates/jianxin-desktop/src/tray.rs",
+      "purpose": "System-native menu delegates appearance to the OS; Web remains governed by this contract."
     },
     {
       "path": "https://support.microsoft.com/en-us/outlook/create-and-respond-to-messages-in-outlook-web-app",

@@ -23,9 +23,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Linux native dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libssl-dev libfontconfig1-dev libfreetype6-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev libxcb1-dev libclang-dev clang
-      - run: cargo check --locked -p jianxin-cli -p jianxin-desktop
-      - run: cargo test --locked -p jianxin-cli -p jianxin-desktop
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+      - run: cargo check --locked -p jianxin-web -p jianxin-cli -p jianxin-desktop
+      - run: cargo test --locked -p jianxin-web -p jianxin-cli -p jianxin-desktop
+      - run: node --test crates/jianxin-web/src/web-reader.test.cjs
       - name: Swift notification wrapper
         if: runner.os == 'macOS'
         run: swiftc -typecheck -framework AppKit -framework UserNotifications platform/macos/Jianxin.swift

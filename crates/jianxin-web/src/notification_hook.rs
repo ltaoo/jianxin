@@ -62,18 +62,16 @@ struct Notification {
     id: Option<String>,
 }
 
-pub(super) fn handle(request: &mut tiny_http::Request) -> Reply {
+pub(super) fn handle(request: &mut tiny_http::Request, runtime: &dyn crate::RuntimeHooks) -> Reply {
     let content_type = request
         .headers()
         .iter()
         .find(|header| header.field.equiv("Content-Type"))
         .map(|header| header.value.as_str().to_owned());
     let mut reader = request.as_reader();
-    deliver(
-        &mut reader,
-        content_type.as_deref(),
-        crate::notifications::send_payload,
-    )
+    deliver(&mut reader, content_type.as_deref(), |payload| {
+        runtime.notify(payload)
+    })
 }
 
 fn deliver(

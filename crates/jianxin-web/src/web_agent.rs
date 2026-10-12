@@ -2,7 +2,7 @@
 use super::*;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{BufRead, BufReader, Read};
 use std::sync::{atomic::AtomicBool, Mutex};
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -22,13 +22,19 @@ struct Session {
 }
 pub(super) struct Manager {
     app: Arc<App>,
+    pub(super) runtime: Arc<dyn crate::RuntimeHooks>,
     sessions: Mutex<HashMap<String, Session>>,
     logins: Mutex<HashMap<String, Value>>,
 }
 impl Manager {
+    #[cfg(test)]
     pub fn new(app: Arc<App>) -> Arc<Self> {
+        Self::with_runtime(app, Arc::new(crate::NoHooks))
+    }
+    pub fn with_runtime(app: Arc<App>, runtime: Arc<dyn crate::RuntimeHooks>) -> Arc<Self> {
         Arc::new(Self {
             app,
+            runtime,
             sessions: Mutex::new(HashMap::new()),
             logins: Mutex::new(HashMap::new()),
         })
@@ -45,12 +51,20 @@ impl Manager {
             .reload_config(config)?;
         Ok(())
     }
-    pub fn import_accounts(&mut self, path: &Path, accounts: Vec<jianxin_config::AccountConfig>) -> Result<()> {
+    pub fn import_accounts(
+        &mut self,
+        path: &Path,
+        accounts: Vec<jianxin_config::AccountConfig>,
+    ) -> Result<()> {
         let mut stored = jianxin_config::AppConfig::load(path)?;
         for mut account in accounts {
             account.source_path = Some(path.to_path_buf());
             let id = account.to_account().id;
-            if let Some(existing) = stored.accounts.iter_mut().find(|existing| existing.to_account().id == id) {
+            if let Some(existing) = stored
+                .accounts
+                .iter_mut()
+                .find(|existing| existing.to_account().id == id)
+            {
                 *existing = account;
             } else {
                 stored.accounts.push(account);
@@ -79,23 +93,59 @@ impl Manager {
         }
         Ok(self.app.resolve_account(Some(value))?.to_account().id)
     }
-    pub fn oauth(self: &Arc<Self>, route: &str, start: bool, config_path: &Path, active: &Arc<AtomicUsize>) -> Reply {
+    pub fn oauth(
+        self: &Arc<Self>,
+        route: &str,
+        start: bool,
+        config_path: &Path,
+        active: &Arc<AtomicUsize>,
+    ) -> Reply {
         let parsed = ammonia::url::Url::parse(&format!("http://localhost/{route}")).unwrap();
-        let account = parsed.query_pairs().find(|(key, _)| key == "account").map(|(_, value)| value.into_owned()).unwrap_or_default();
-        let Some(cfg) = self.app.account_configs().iter().find(|cfg| cfg.to_account().id == account).cloned() else {
+        let account = parsed
+            .query_pairs()
+            .find(|(key, _)| key == "account")
+            .map(|(_, value)| value.into_owned())
+            .unwrap_or_default();
+        let Some(cfg) = self
+            .app
+            .account_configs()
+            .iter()
+            .find(|cfg| cfg.to_account().id == account)
+            .cloned()
+        else {
             return Reply::json(400, json!({"error":"邮箱不存在"}));
         };
         let mut logins = self.logins.lock().unwrap();
         if !start {
-            return Reply::json(200, logins.get(&account).cloned().unwrap_or_else(|| json!({"state":"idle","busy":false})));
+            return Reply::json(
+                200,
+                logins
+                    .get(&account)
+                    .cloned()
+                    .unwrap_or_else(|| json!({"state":"idle","busy":false})),
+            );
         }
-        let jianxin_config::AuthConfig::OAuth2 { client_id: Some(client_id), token_endpoint: Some(endpoint), .. } = &cfg.auth else {
-            return Reply::json(400, json!({"error":"此邮箱需要配置 OAuth client_id 和 token_endpoint"}));
+        let jianxin_config::AuthConfig::OAuth2 {
+            client_id: Some(client_id),
+            token_endpoint: Some(endpoint),
+            ..
+        } = &cfg.auth
+        else {
+            return Reply::json(
+                400,
+                json!({"error":"此邮箱需要配置 OAuth client_id 和 token_endpoint"}),
+            );
         };
         if client_id.trim().is_empty() || !endpoint.ends_with("/token") {
-            return Reply::json(400, json!({"error":"请先填写并保存 OAuth 应用 ID 和令牌端点，再开始授权"}));
+            return Reply::json(
+                400,
+                json!({"error":"请先填写并保存 OAuth 应用 ID 和令牌端点，再开始授权"}),
+            );
         }
-        if logins.get(&account).is_some_and(|login| login["busy"] == true) {
+        if logins
+            .get(&account)
+            .is_some_and(|login| login["busy"] == true)
+        {
             return Reply::json(200, logins[&account].clone());
         }
         // ponytail: one login at a time prevents concurrent whole-config token writes.
@@ -107,34 +157,65 @@ impl Manager {
         drop(logins);
         let manager = Arc::clone(self);
         let active = Arc::clone(active);
-        let config_path = cfg.source_path.clone().unwrap_or_else(|| config_path.to_path_buf());
+        let config_path = cfg
+            .source_path
+            .clone()
+            .unwrap_or_else(|| config_path.to_path_buf());
         active.fetch_add(1, Ordering::SeqCst);
         std::thread::spawn(move || {
             let result = jianxin_provider::auth::login_device_code(&cfg, |prompt| {
-                let url = ammonia::url::Url::parse(&prompt.verification_uri).ok().filter(|url|
-                    url.scheme() == "https" && url.host_str().is_some() && url.username().is_empty() && url.password().is_none());
+                let url = ammonia::url::Url::parse(&prompt.verification_uri)
+                    .ok()
+                    .filter(|url| {
+                        url.scheme() == "https"
+                            && url.host_str().is_some()
+                            && url.username().is_empty()
+                            && url.password().is_none()
+                    });
                 let Some(url) = url else {
-                    return Err(jianxin_domain::MailError::new(jianxin_domain::MailErrorCode::AuthenticationFailed, "invalid verification URL"));
+                    return Err(jianxin_domain::MailError::new(
+                        jianxin_domain::MailErrorCode::AuthenticationFailed,
+                        "invalid verification URL",
+                    ));
                 };
                 let state = json!({"state":"pending","busy":true,"user_code":prompt.user_code,"verification_uri":url.as_str()});
-                manager.logins.lock().unwrap().insert(account.clone(), state);
+                manager
+                    .logins
+                    .lock()
+                    .unwrap()
+                    .insert(account.clone(), state);
                 Ok(())
             });
             let mut logins = manager.logins.lock().unwrap();
-            let valid_prompt = logins.get(&account).is_some_and(|login| login["state"] == "pending");
+            let valid_prompt = logins
+                .get(&account)
+                .is_some_and(|login| login["state"] == "pending");
             let state = match result {
                 Ok(login) if valid_prompt => {
-                    match jianxin_config::AppConfig::store_refresh_token(&config_path, &cfg.email, &login.refresh_token) {
+                    match jianxin_config::AppConfig::store_refresh_token(
+                        &config_path,
+                        &cfg.email,
+                        &login.refresh_token,
+                    ) {
                         Ok(()) => {
                             // Authorization succeeded; do not claim that mail has already synced.
-                            let path = manager.app.config().data_dir().join("account-status").join(format!("{account}.txt"));
+                            let path = manager
+                                .app
+                                .config()
+                                .data_dir()
+                                .join("account-status")
+                                .join(format!("{account}.txt"));
                             let _ = std::fs::remove_file(path);
                             json!({"state":"complete","busy":false})
                         }
-                        Err(_) => json!({"state":"failed","busy":false,"error":"授权成功，但凭据保存失败，请检查配置文件权限后重试"}),
+                        Err(_) => {
+                            json!({"state":"failed","busy":false,"error":"授权成功，但凭据保存失败，请检查配置文件权限后重试"})
+                        }
                     }
                 }
-                _ => json!({"state":"failed","busy":false,"error":"OAuth 登录未完成或已过期，请检查配置后重新授权"}),
+                _ => {
+                    json!({"state":"failed","busy":false,"error":"OAuth 登录未完成或已过期，请检查配置后重新授权"})
+                }
             };
             logins.insert(account, state);
             drop(logins);
@@ -160,7 +241,7 @@ impl Manager {
         let cfg = &self.app.config().general.agent;
         Reply::json(
             200,
-            json!({"configured": !cfg.model.trim().is_empty() && (cfg.base_url.starts_with("http://") || cfg.api_key.as_ref().is_some_and(|k|k.has_value())), "model":cfg.model,"mcp":{"command":std::env::current_exe().ok().map(|p|p.to_string_lossy().into_owned()).unwrap_or_else(||"jianxin".into()),"args":["agent"]},"tools":jianxin_agent::read_tool_specs().iter().map(|t|t["name"].clone()).collect::<Vec<_>>(),"messages":s.messages.iter().filter(|v| v["role"] != "tool").map(|v|json!({"role":v["role"],"content":v["content"]})).collect::<Vec<_>>(),"stream":s.stream,"trace":s.trace,"drafts":s.drafts,"busy":s.busy,"error":s.error}),
+            json!({"configured": !cfg.model.trim().is_empty() && (cfg.base_url.starts_with("http://") || cfg.api_key.as_ref().is_some_and(|k|k.has_value())), "model":cfg.model,"mcp":self.runtime.mcp_command(),"tools":jianxin_agent::read_tool_specs().iter().map(|t|t["name"].clone()).collect::<Vec<_>>(),"messages":s.messages.iter().filter(|v| v["role"] != "tool").map(|v|json!({"role":v["role"],"content":v["content"]})).collect::<Vec<_>>(),"stream":s.stream,"trace":s.trace,"drafts":s.drafts,"busy":s.busy,"error":s.error}),
         )
     }
     pub fn post(
@@ -462,7 +543,7 @@ impl Manager {
             if let Some(ref key) = key {
                 request = request.set("Authorization", &format!("Bearer {key}"));
             }
-            let response=request.set("Content-Type","application/json").send_string(&json!({"model":cfg.model,"mcp":{"command":std::env::current_exe().ok().map(|p|p.to_string_lossy().into_owned()).unwrap_or_else(||"jianxin".into()),"args":["agent"]},"tools":jianxin_agent::read_tool_specs().iter().map(|t|t["name"].clone()).collect::<Vec<_>>(),"messages":messages,"tools":tools,"stream":true,"max_tokens":2000}).to_string()).map_err(|_|anyhow::anyhow!("模型请求失败，请检查地址、密钥或网络"))?;
+            let response=request.set("Content-Type","application/json").send_string(&json!({"model":cfg.model,"mcp":self.runtime.mcp_command(),"tools":jianxin_agent::read_tool_specs().iter().map(|t|t["name"].clone()).collect::<Vec<_>>(),"messages":messages,"tools":tools,"stream":true,"max_tokens":2000}).to_string()).map_err(|_|anyhow::anyhow!("模型请求失败，请检查地址、密钥或网络"))?;
             let response = self.completion(scope, response, &cancel)?;
             if cancel.load(Ordering::SeqCst) {
                 bail!("已停止生成");
@@ -855,12 +936,22 @@ mod tests {
         let directory = manager.app.config().data_dir();
         let path = test_temp_dir().join(format!("jianxin-reload-{}.json", uuid::Uuid::new_v4()));
         let mut config = manager.app.config().clone();
-        config.accounts[0].auth = jianxin_config::AuthConfig::Password { username: None, password: jianxin_config::SecretRef::Plain("updated-fixture".into()) };
-        config.accounts[0].imap = Some(jianxin_config::ServerConfig::new("updated.example.com", 993, jianxin_config::TlsMode::Tls));
+        config.accounts[0].auth = jianxin_config::AuthConfig::Password {
+            username: None,
+            password: jianxin_config::SecretRef::Plain("updated-fixture".into()),
+        };
+        config.accounts[0].imap = Some(jianxin_config::ServerConfig::new(
+            "updated.example.com",
+            993,
+            jianxin_config::TlsMode::Tls,
+        ));
         config.general.data_dir = Some(test_temp_dir().join("unused-reload-directory"));
         config.general.agent.model = "ignored".into();
         config.save(&path).unwrap();
-        Arc::get_mut(&mut manager).unwrap().reload_accounts(&path).unwrap();
+        Arc::get_mut(&mut manager)
+            .unwrap()
+            .reload_accounts(&path)
+            .unwrap();
         let account = &manager.app.account_configs()[0];
         assert_eq!(account.auth.password().unwrap(), "updated-fixture");
         assert_eq!(account.imap_server().host, "updated.example.com");
