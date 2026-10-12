@@ -106,6 +106,56 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
         ));
     }
     let query: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+    if path == "api/sync-logs" {
+        let selected = query.get("account").map(String::as_str).unwrap_or("");
+        if !selected.is_empty() && !known_account(app, selected) {
+            bail!("unknown account");
+        }
+        let page = query
+            .get("page")
+            .map(|value| value.parse::<u32>())
+            .transpose()?
+            .unwrap_or(0);
+        if page > 2000 {
+            bail!("invalid log page");
+        }
+        let conn = app.db().lock();
+        let mut summaries = Vec::new();
+        let mut allowed = Vec::new();
+        for cfg in app.account_configs() {
+            let account = cfg.to_account();
+            let last = jianxin_store::sync_log_repo::latest(&conn, &account.id)?;
+            let folders = jianxin_store::folder_repo::list(&conn, &account.id)?;
+            let status = jianxin_core::read_account_sync_status(
+                app.config(),
+                &account.id,
+                !folders.is_empty(),
+            );
+            summaries.push(serde_json::json!({"id":account.id,"email":account.email,
+                "status":{"state":status,"label":status.label(),"tone":status.tone()},
+                "last_sync_at":last.as_ref().map(|entry|entry.completed_at),
+                "last_result":last.as_ref().map(|entry|sync_log_status(&entry.status))}));
+            if selected.is_empty() || selected == account.id {
+                allowed.push(account.id);
+            }
+        }
+        let mut logs = jianxin_store::sync_log_repo::list(&conn, &allowed, 51, page * 50)?;
+        let more = logs.len() > 50;
+        logs.truncate(50);
+        let logs: Vec<_> = logs
+            .into_iter()
+            .map(|entry| {
+                serde_json::json!({
+                    "id":entry.id,"account_id":entry.account_id,"completed_at":entry.completed_at,
+                    "result":sync_log_status(&entry.status)
+                })
+            })
+            .collect();
+        return Ok(Reply::json(
+            200,
+            serde_json::json!({"accounts":summaries,"logs":logs,"page":page,"more":more,"retention":jianxin_store::sync_log_repo::RETENTION}),
+        ));
+    }
     if path == "api/contacts" {
         let search = query.get("q").map(String::as_str).unwrap_or("");
         if search.len() > 256 {
@@ -272,6 +322,7 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
     }
     if path.is_empty()
         || path == "components"
+        || path == "logs"
         || ["message/", "thread/"]
             .iter()
             .any(|prefix| path.strip_prefix(prefix).is_some_and(identifier))
@@ -285,6 +336,11 @@ pub(super) fn render(app: &App, root: &str, route: &str) -> Result<Reply> {
     bail!("unknown route")
 }
 
+fn sync_log_status(key: &str) -> serde_json::Value {
+    let status = jianxin_core::AccountSyncStatus::from_key(key);
+    serde_json::json!({"state":status,"label":status.label(),"tone":status.tone()})
+}
+
 fn known_account(app: &App, id: &str) -> bool {
     app.account_configs()
         .iter()
@@ -294,6 +350,67 @@ fn known_account(app: &App, id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn sync_log_api_scopes_history_supports_paging_and_keeps_pending_accounts() {
+        let directory =
+            std::env::temp_dir().join(format!("jianxin-web-logs-{}", jianxin_domain::new_id()));
+        let config = serde_json::from_value(serde_json::json!({"general":{"data_dir":directory},"accounts":[
+            {"email":"first@example.com","auth":{"type":"password","password":"private-password"}},
+            {"email":"pending@outlook.com","auth":{"type":"oauth2"}}
+        ]})).unwrap();
+        let app =
+            App::with_database(config, jianxin_store::Database::open_in_memory().unwrap()).unwrap();
+        let id = app.account_configs()[0].to_account().id;
+        let removed = jianxin_domain::Account::new(
+            jianxin_domain::ProviderId::GenericImap,
+            "removed@example.com",
+            jianxin_domain::AuthType::Password,
+        );
+        jianxin_store::account_repo::upsert(&app.db().lock(), &removed).unwrap();
+        jianxin_store::sync_log_repo::record(&app.db().lock(), &removed.id, "synced").unwrap();
+        for _ in 0..51 {
+            app.record_sync_status(&id, None);
+        }
+        app.record_sync_status(&id, Some("AUTHENTICATION_FAILED private-password"));
+        let response = render(&app, "/secret", "api/sync-logs").unwrap();
+        assert!(!response.body.contains("private-password"));
+        assert!(!response.body.contains("removed@example.com"));
+        let result: serde_json::Value = serde_json::from_str(&response.body).unwrap();
+        assert_eq!(result["logs"].as_array().unwrap().len(), 50);
+        assert_eq!(result["more"], true);
+        assert_eq!(result["logs"][0]["result"]["state"], "login_failed");
+        assert_eq!(
+            result["accounts"][0]["last_result"]["state"],
+            "login_failed"
+        );
+        assert!(result["accounts"][0]["last_sync_at"].as_i64().unwrap() > 0);
+        assert_eq!(
+            result["accounts"][1]["last_sync_at"],
+            serde_json::Value::Null
+        );
+        assert_eq!(result["accounts"][1]["status"]["state"], "oauth_required");
+        let response = render(
+            &app,
+            "/secret",
+            &format!("api/sync-logs?account={id}&page=1"),
+        )
+        .unwrap();
+        let result: serde_json::Value = serde_json::from_str(&response.body).unwrap();
+        assert_eq!(result["logs"].as_array().unwrap().len(), 2);
+        assert_eq!(result["more"], false);
+        let pending = app.account_configs()[1].to_account().id;
+        let response =
+            render(&app, "/secret", &format!("api/sync-logs?account={pending}")).unwrap();
+        let result: serde_json::Value = serde_json::from_str(&response.body).unwrap();
+        assert!(result["logs"].as_array().unwrap().is_empty());
+        assert!(render(&app, "/secret", "api/sync-logs?account=unknown").is_err());
+        assert!(render(&app, "/secret", "api/sync-logs?page=999999999").is_err());
+        assert!(render(&app, "/secret", "logs")
+            .unwrap()
+            .body
+            .contains("/secret/assets/app.js"));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
     #[test]
     fn folder_thread_reading_excludes_sent_replies_but_full_conversations_keep_them() {
         let (app, root) = super::super::tests::fixture();

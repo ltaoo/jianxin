@@ -604,7 +604,7 @@ fn cmd_sync(
             Err(error) => Some(error.to_string()),
             Ok(report) => report.failures.first().map(|failure| failure.error.to_string()),
         };
-        jianxin_core::record_account_sync_status(app.config(), &account.id, error.as_deref());
+        app.record_sync_status(&account.id, error.as_deref());
         let report = outcome?;
 
         if out.is_json() {

@@ -16,6 +16,24 @@ pub enum AccountSyncStatus {
 }
 
 impl AccountSyncStatus {
+    pub fn from_error(error: Option<&str>) -> Self {
+        match error {
+            None => Self::Synced,
+            Some(e) if e.contains("AUTHENTICATION_FAILED") => Self::LoginFailed,
+            Some(e) if e.contains("AUTHENTICATION_REQUIRED") && e.contains("oauth2") => Self::OAuthRequired,
+            Some(e) if e.contains("AUTHENTICATION_REQUIRED") => Self::MissingCredentials,
+            Some(_) => Self::SyncFailed,
+        }
+    }
+
+    pub fn from_key(key: &str) -> Self {
+        match key {
+            "synced" => Self::Synced, "login_failed" => Self::LoginFailed,
+            "oauth_required" => Self::OAuthRequired, "missing_credentials" => Self::MissingCredentials,
+            _ => Self::SyncFailed,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Synced => "已同步",
@@ -74,6 +92,23 @@ pub fn read_account_sync_status(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn completed_attempts_survive_restart_without_storing_credentials() {
+        let directory = std::env::temp_dir().join(format!("jianxin-sync-logs-{}", jianxin_domain::new_id()));
+        let config: AppConfig = serde_json::from_value(serde_json::json!({"general":{"data_dir":directory},"accounts":[{"email":"a@example.com","auth":{"type":"password","password":"private-password"}}]})).unwrap();
+        let app = crate::App::new(config.clone()).unwrap();
+        let id = config.accounts[0].to_account().id;
+        app.record_sync_status(&id, None);
+        app.record_sync_status(&id, Some("AUTHENTICATION_FAILED private-password"));
+        drop(app);
+        let app = crate::App::new(config).unwrap();
+        let logs = jianxin_store::sync_log_repo::list(&app.db().lock(), &[id.clone()], 10, 0).unwrap();
+        assert_eq!(logs.len(), 2);
+        assert_eq!(logs[0].status, "login_failed"); assert_eq!(logs[1].status, "synced");
+        assert!(logs[0].completed_at > 0);
+        assert!(!serde_json::to_string(&logs).unwrap().contains("private-password"));
+        drop(app); std::fs::remove_dir_all(directory).unwrap();
+    }
     #[test]
     fn oauth_without_credentials_is_pending_immediately_before_any_sync() {
         assert_eq!(serde_json::to_value(AccountSyncStatus::OAuthRequired).unwrap(), "oauth_required");

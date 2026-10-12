@@ -7,6 +7,7 @@ const QUIT_MENU_ID: &str = "jianxin.quit";
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     Open(Option<String>),
+    Mailbox(String),
     Refresh,
     Quit,
 }
@@ -16,6 +17,7 @@ enum Entry {
     Label(String),
     Item(String, Action),
     Separator,
+    Mailboxes(Vec<crate::model::MailboxRow>),
 }
 
 fn entries(snapshot: &Snapshot, status: Option<&str>) -> Vec<Entry> {
@@ -44,11 +46,34 @@ fn entries(snapshot: &Snapshot, status: Option<&str>) -> Vec<Entry> {
     }
     entries.extend([
         Entry::Separator,
+        Entry::Mailboxes(snapshot.mailboxes.clone()),
         Entry::Item("打开邮件阅读器".into(), Action::Open(None)),
         Entry::Item("立即收信 / 刷新菜单".into(), Action::Refresh),
         Entry::Item("退出应用".into(), Action::Quit),
     ]);
     entries
+}
+
+fn mailbox_title(mailbox: &crate::model::MailboxRow) -> String {
+    let time = mailbox
+        .last_sync_at
+        .and_then(|time| chrono::DateTime::from_timestamp(time, 0))
+        .map(|time| {
+            time.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string()
+        });
+    format!(
+        "{} · {} · {}",
+        mailbox
+            .email
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" "),
+        time.map(|time| format!("最近同步 {time}"))
+            .unwrap_or_else(|| "尚无同步记录".into()),
+        mailbox.status
+    )
 }
 
 fn menu_title(subject: &str) -> String {
@@ -127,11 +152,24 @@ impl NativeTray {
         tray_icon::menu::Menu,
         std::collections::HashMap<tray_icon::menu::MenuId, Action>,
     )> {
-        use tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem};
+        use tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
         let menu = Menu::new();
         let mut actions = std::collections::HashMap::new();
         for entry in entries {
             match entry {
+                Entry::Mailboxes(mailboxes) => {
+                    let submenu = Submenu::new("邮箱", true);
+                    if mailboxes.is_empty() {
+                        submenu.append(&MenuItem::new("尚未添加邮箱", false, None))?;
+                    }
+                    for mailbox in mailboxes {
+                        let item =
+                            MenuItem::new(mailbox_title(&mailbox).replace('&', "&&"), true, None);
+                        actions.insert(item.id().clone(), Action::Mailbox(mailbox.id));
+                        submenu.append(&item)?;
+                    }
+                    menu.append(&submenu)?;
+                }
                 Entry::Separator => menu.append(&PredefinedMenuItem::separator())?,
                 Entry::Label(text) => {
                     menu.append(&MenuItem::new(text.replace('&', "&&"), false, None))?
@@ -166,8 +204,8 @@ impl NativeTray {
         let icon_bytes = include_bytes!("../../../assets/jianxin-tray-template.png").as_slice();
         #[cfg(target_os = "windows")]
         let icon_bytes = include_bytes!("../../../assets/jianxin-tray.png").as_slice();
-        let image = image::load_from_memory_with_format(icon_bytes, image::ImageFormat::Png)?
-            .into_rgba8();
+        let image =
+            image::load_from_memory_with_format(icon_bytes, image::ImageFormat::Png)?.into_rgba8();
         let (width, height) = image.dimensions();
         let icon = tray_icon::Icon::from_rgba(image.into_raw(), width, height)?;
         let builder = tray_icon::TrayIconBuilder::new()
@@ -242,6 +280,37 @@ impl ksni::Tray for LinuxTray {
             .iter()
             .map(|entry| {
                 let (label, action) = match entry {
+                    Entry::Mailboxes(mailboxes) => {
+                        return ksni::menu::SubMenu {
+                            label: "邮箱".into(),
+                            submenu: if mailboxes.is_empty() {
+                                vec![ksni::menu::StandardItem {
+                                    label: "尚未添加邮箱".into(),
+                                    enabled: false,
+                                    ..Default::default()
+                                }
+                                .into()]
+                            } else {
+                                mailboxes
+                                    .iter()
+                                    .map(|mailbox| {
+                                        let id = mailbox.id.clone();
+                                        ksni::menu::StandardItem {
+                                            label: mailbox_title(mailbox).replace('_', "__"),
+                                            activate: Box::new(move |tray: &mut Self| {
+                                                let _ =
+                                                    tray.sender.send(Action::Mailbox(id.clone()));
+                                            }),
+                                            ..Default::default()
+                                        }
+                                        .into()
+                                    })
+                                    .collect()
+                            },
+                            ..Default::default()
+                        }
+                        .into()
+                    }
                     Entry::Separator => return ksni::MenuItem::Separator,
                     Entry::Label(label) => (label, None),
                     Entry::Item(label, action) => (label, Some(action.clone())),
@@ -323,6 +392,43 @@ impl Drop for NativeTray {
 mod tests {
     use super::*;
     #[test]
+    fn mailbox_submenu_includes_unsynced_accounts_and_latest_attempt_times() {
+        let mailboxes = vec![
+            crate::model::MailboxRow {
+                id: "first".into(),
+                email: "a@example.com".into(),
+                last_sync_at: None,
+                status: "未同步".into(),
+            },
+            crate::model::MailboxRow {
+                id: "second".into(),
+                email: "b@example.com".into(),
+                last_sync_at: Some(1700000000),
+                status: "登录失败".into(),
+            },
+        ];
+        let menu = entries(
+            &Snapshot {
+                mailboxes: mailboxes.clone(),
+                ..Default::default()
+            },
+            None,
+        );
+        let Entry::Mailboxes(rows) = menu
+            .iter()
+            .find(|entry| matches!(entry, Entry::Mailboxes(_)))
+            .unwrap()
+        else {
+            unreachable!()
+        };
+        assert_eq!(rows, &mailboxes);
+        assert!(mailbox_title(&rows[0]).contains("尚无同步记录"));
+        let title = mailbox_title(&rows[1]);
+        assert!(title.contains("最近同步 2023-"));
+        assert!(title.contains("登录失败"));
+    }
+
+    #[test]
     fn menu_keeps_title_only_and_routes_duplicate_titles_by_id() {
         let snapshot = Snapshot {
             loaded: true,
@@ -334,6 +440,7 @@ mod tests {
                 })
                 .collect(),
             error: None,
+            mailboxes: vec![],
         };
         let menu = entries(&snapshot, None);
         let mails: Vec<_> = menu

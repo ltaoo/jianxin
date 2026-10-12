@@ -27,6 +27,7 @@ pub mod migrations;
 pub mod mail_event_repo;
 pub mod outbox_repo;
 pub mod sync_repo;
+pub mod sync_log_repo;
 pub mod thread_repo;
 pub mod reader_repo;
 

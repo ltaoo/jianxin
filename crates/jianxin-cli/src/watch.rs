@@ -45,7 +45,7 @@ pub fn run(app: &App, selector: Option<&str>, options: Options) -> Result<()> {
             let account = cfg.to_account();
             let result = poll_account(app, cfg, &mut baselined);
             let error = result.as_ref().err().map(ToString::to_string);
-            jianxin_core::record_account_sync_status(app.config(), &account.id, error.as_deref());
+            app.record_sync_status(&account.id, error.as_deref());
             if let Err(err) = result {
                 eprintln!("watch {}: {err}", account.email);
             }
@@ -76,7 +76,7 @@ impl Poller {
             let account = cfg.to_account();
             let result = poll_account(app, cfg, &mut self.baselined);
             let error = result.as_ref().err().map(ToString::to_string);
-            jianxin_core::record_account_sync_status(app.config(), &account.id, error.as_deref());
+            app.record_sync_status(&account.id, error.as_deref());
             if let Err(error) = result {
                 eprintln!("watch {}: {error}", account.email);
             }

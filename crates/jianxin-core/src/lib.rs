@@ -223,6 +223,17 @@ impl App {
         SyncEngine::new(self)
     }
 
+    /// Record a completed attempt even when provider construction or login fails.
+    pub fn record_sync_status(&self, account_id: &str, error: Option<&str>) {
+        record_account_sync_status(self.config(), account_id, error);
+        let status = serde_json::to_value(AccountSyncStatus::from_error(error)).unwrap();
+        if let Err(error) = self.db().transaction(|conn| {
+            jianxin_store::sync_log_repo::record(conn, account_id, status.as_str().unwrap())
+        }) {
+            tracing::warn!(%error, "cannot persist sync history");
+        }
+    }
+
     pub fn mail(&self) -> MailService<'_> {
         MailService::new(self)
     }
@@ -244,13 +255,7 @@ pub fn attachment_dir(config: &AppConfig, account_id: &str) -> PathBuf {
 
 /// Persist a safe, actionable status shared by the watcher and terminal UI.
 pub fn record_account_sync_status(config: &AppConfig, account_id: &str, error: Option<&str>) {
-    let status = match error {
-        None => "已同步",
-        Some(e) if e.contains("AUTHENTICATION_FAILED") => "登录失败：更新客户端授权码",
-        Some(e) if e.contains("AUTHENTICATION_REQUIRED") && e.contains("oauth2") => "等待 OAuth 登录",
-        Some(e) if e.contains("AUTHENTICATION_REQUIRED") => "缺少凭据：配置客户端授权码",
-        Some(_) => "同步失败：按 f 重试",
-    };
+    let status = AccountSyncStatus::from_error(error).tui_label();
     let directory = config.data_dir().join("account-status");
     if std::fs::create_dir_all(&directory).is_err() { return; }
     let target = directory.join(format!("{account_id}.txt"));

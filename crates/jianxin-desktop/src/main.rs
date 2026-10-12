@@ -260,6 +260,9 @@ fn run() -> Result<()> {
                             account: None,
                         });
                     }
+                    tray::Action::Mailbox(account) => {
+                        let _ = open.send(OpenRequest { message: None, account: Some(account) });
+                    }
                 }
             }
             for request in instance::drain(&data_dir) {
@@ -308,7 +311,14 @@ fn open_url(app: &App, root: &str, request: &OpenRequest) -> Result<String> {
         .as_deref()
         .map(|id| jianxin_web::resolve_message(app, request.account.as_deref(), id))
         .transpose()?;
-    Ok(jianxin_web::message_url(host, message.as_ref()))
+    let mut url = ammonia::url::Url::parse(&jianxin_web::message_url(host, message.as_ref()))?;
+    if message.is_none() {
+        if let Some(id) = &request.account {
+            let account = app.account_configs().iter().find(|cfg|cfg.to_account().id == *id).context("邮箱不存在")?;
+            url.query_pairs_mut().append_pair("account", &account.to_account().id);
+        }
+    }
+    Ok(url.into())
 }
 
 #[cfg(test)]
@@ -365,6 +375,9 @@ mod tests {
         assert_eq!(parsed.fragment(), Some("mail-menu-mail"));
         assert!(!app.mail().get(&message.id).unwrap().is_read);
         assert_eq!(open_url(&app, root, &OpenRequest::default()).unwrap(), root);
+        let url = open_url(&app, root, &OpenRequest { message: None, account: Some(account.clone()) }).unwrap();
+        assert_eq!(ammonia::url::Url::parse(&url).unwrap().query_pairs().find(|(key, _)| key == "account").unwrap().1, account);
+        assert!(open_url(&app, root, &OpenRequest { message: None, account: Some("unknown".into()) }).is_err());
     }
 }
 

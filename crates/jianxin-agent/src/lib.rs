@@ -992,10 +992,16 @@ fn list_threads(app: &App, args: ThreadListArgs) -> Result<Value> {
 fn sync_account(app: &App, args: SyncArgs) -> Result<Value> {
     let cfg = app.resolve_account(Some(&args.account_id))?;
     let account = cfg.to_account();
-    let provider = app.provider(&cfg)?;
-    let report = app
-        .sync()
-        .sync_account(&*provider, &account.id, args.full)?;
+    let outcome = (|| -> Result<jianxin_core::SyncReport> {
+        let provider = app.provider(&cfg)?;
+        Ok(app.sync().sync_account(&*provider, &account.id, args.full)?)
+    })();
+    let error = match &outcome {
+        Err(error) => Some(error.to_string()),
+        Ok(report) => report.failures.first().map(|failure| failure.error.to_string()),
+    };
+    app.record_sync_status(&account.id, error.as_deref());
+    let report = outcome?;
     Ok(json!({
         "account_id": cfg.alias(),
         "folders_changed": report.folders_changed,

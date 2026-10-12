@@ -56,6 +56,7 @@ export function InboxPageView(props) {
       View({ class: 'jx-sidebar-footer', attributes: { n: 'mailbox-sidebar-footer' } }, [
         Button({ store: ui.importMailboxes, variant: 'primary', icon: 'mail', attributes: { n: 'import-mailbox-config' } }),
         Button({ store: ui.reloadMailboxes, variant: 'ghost', attributes: { n: 'refresh-mailbox-config' } }),
+        View({ as: 'a', class: 'jx-button jx-button--ghost', attributes: { n: 'sync-logs-navigation', href: `${props.root}/logs` } }, [Glyph('clock'), '同步日志']),
         Show({ when: s.configStatus, ok: () => View({ as: 'p', class: 'jx-muted', attributes: { n: 'mailbox-config-feedback', role: 'status' } }, [s.configStatus]) }),
         View({ class: 'jx-row' }, [Glyph('server'), '本地邮件阅读器']),
         View({ as: 'p', class: 'jx-muted' }, ['后台自动收信，刷新查看新邮件。'])]),

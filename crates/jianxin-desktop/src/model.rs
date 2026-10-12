@@ -15,6 +15,15 @@ pub struct Snapshot {
     pub rows: Vec<MailRow>,
     pub error: Option<String>,
     pub loaded: bool,
+    pub mailboxes: Vec<MailboxRow>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MailboxRow {
+    pub id: String,
+    pub email: String,
+    pub last_sync_at: Option<i64>,
+    pub status: String,
 }
 
 pub fn load_snapshot(app: &App) -> Result<Snapshot> {
@@ -37,6 +46,25 @@ pub fn load_snapshot(app: &App) -> Result<Snapshot> {
         rows,
         loaded: true,
         error: None,
+        mailboxes: app
+            .account_configs()
+            .iter()
+            .map(|cfg| {
+                let account = cfg.to_account();
+                let last = jianxin_store::sync_log_repo::latest(&app.db().lock(), &account.id)?;
+                let status = jianxin_core::read_account_sync_status(
+                    app.config(),
+                    &account.id,
+                    !app.mail().folders(&account.id)?.is_empty(),
+                );
+                Ok(MailboxRow {
+                    id: account.id,
+                    email: account.email,
+                    last_sync_at: last.map(|entry| entry.completed_at),
+                    status: status.label().into(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?,
     })
 }
 

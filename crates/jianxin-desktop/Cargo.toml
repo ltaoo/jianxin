@@ -8,6 +8,7 @@ build = "../../platform/windows/build.rs"
 
 [dependencies]
 anyhow.workspace = true
+chrono.workspace = true
 jianxin-config.workspace = true
 jianxin-core.workspace = true
 jianxin-domain.workspace = true

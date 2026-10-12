@@ -1253,7 +1253,7 @@ fn sync_all_accounts(app: &App) -> WorkerMsg {
 
 fn sync_account(app: &App, cfg: &AccountConfig) -> Result<String, String> {
     let result = sync_account_inner(app, cfg);
-    jianxin_core::record_account_sync_status(app.config(), &cfg.to_account().id, result.as_ref().err().map(String::as_str));
+    app.record_sync_status(&cfg.to_account().id, result.as_ref().err().map(String::as_str));
     result
 }
 

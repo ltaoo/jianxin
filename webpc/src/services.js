@@ -20,6 +20,7 @@ export function MailService(root, request = fetch) {
   }
   return {
     mailboxes: signal => json('api/mailboxes', { signal }),
+    syncLogs: (params, signal) => json(`api/sync-logs?${new URLSearchParams(params)}`, { signal }),
     configPresets: signal => json('api/config/presets', { signal }),
     configSource: (url, signal) => json('api/config/source', { method: 'POST', signal,
       headers: { 'Content-Type': 'application/json', 'X-Jianxin-Request': '1' }, body: JSON.stringify({ url }) }),

@@ -19,7 +19,7 @@ use jianxin_domain::{MailError, MailErrorCode, Result};
 use rusqlite::Connection;
 
 /// Current `PRAGMA user_version`. Bump whenever a `SCHEMA_V*` block is added.
-pub const LATEST_VERSION: u32 = 6;
+pub const LATEST_VERSION: u32 = 7;
 
 /// Everything needed to create a database from scratch.
 const SCHEMA_V1: &str = r#"
@@ -262,6 +262,17 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
         for id in ids {
             crate::thread_repo::recompute(&tx, &id)?;
         }
+    }
+    if current < 7 {
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS sync_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                completed_at INTEGER NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('synced','login_failed','oauth_required','missing_credentials','sync_failed'))
+             );
+             CREATE INDEX IF NOT EXISTS sync_logs_account ON sync_logs(account_id, id DESC);",
+        ).map_err(db_err)?;
     }
     tx.pragma_update(None, "user_version", LATEST_VERSION)
         .map_err(db_err)?;
