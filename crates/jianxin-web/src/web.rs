@@ -24,6 +24,10 @@ mod web_reply;
 mod notification_hook;
 #[path = "web_config.rs"]
 mod web_config;
+#[path = "web_listener.rs"]
+mod web_listener;
+#[path = "web_refresh.rs"]
+mod web_refresh;
 
 const PAGE_SIZE: u32 = 50;
 const STYLE: &str = include_str!("web.css");
@@ -76,6 +80,36 @@ pub fn serve(
     idle_seconds: u64,
     control: crate::ServiceControl,
 ) -> Result<()> {
+    let server = Server::http(("127.0.0.1", port))
+        .map_err(|e| anyhow::anyhow!("无法启动本地 Web 服务: {e}"))?;
+    serve_with_server(
+        app,
+        config_path,
+        selector,
+        server,
+        hint,
+        import_config,
+        idle_seconds,
+        control,
+    )
+}
+
+/// Desktop sessions reuse a high loopback port, including remembered fallback ports.
+pub fn serve_desktop(app: App, config_path: &Path, control: crate::ServiceControl) -> Result<()> {
+    let server = web_listener::bind(&app.config().data_dir())?;
+    serve_with_server(app, config_path, None, server, None, false, 0, control)
+}
+
+fn serve_with_server(
+    app: App,
+    config_path: &Path,
+    selector: Option<&str>,
+    server: Server,
+    hint: Option<&str>,
+    import_config: bool,
+    idle_seconds: u64,
+    control: crate::ServiceControl,
+) -> Result<()> {
     let api_token = app
         .config()
         .general
@@ -93,8 +127,6 @@ pub fn serve(
     let selected = hint
         .map(|id| resolve_message(&app, selector, id))
         .transpose()?;
-    let server = Server::http(("127.0.0.1", port))
-        .map_err(|e| anyhow::anyhow!("无法启动本地 Web 服务: {e}"))?;
     let port = server
         .server_addr()
         .to_ip()
@@ -114,6 +146,7 @@ pub fn serve(
     let mut last_request = Instant::now();
     let mut memory_released = false;
     let active_writes = Arc::new(AtomicUsize::new(0));
+    let refreshes = Arc::new(web_refresh::Refresher::default());
     let mut agent = web_agent::Manager::with_runtime(app, control.runtime);
     while !control.shutdown.load(Ordering::SeqCst) {
         let app = agent.app();
@@ -240,6 +273,7 @@ pub fn serve(
             let app = Arc::clone(&app);
             let active = Arc::clone(&active_writes);
             let agent = Arc::clone(&agent);
+            let refreshes = Arc::clone(&refreshes);
             let config_path = config_path.to_path_buf();
             std::thread::spawn(move || {
                 let reply = if route == "api/config/source" {
@@ -250,6 +284,8 @@ pub fn serve(
                     notification_hook::handle(&mut request, &*agent.runtime)
                 } else if route.split('?').next() == Some("api/mailboxes/oauth") {
                     agent.oauth(&route, true, &config_path, &active)
+                } else if route.split('?').next() == Some("api/mailboxes/refresh") {
+                    refreshes.post(&app, &*agent.runtime, &route)
                 } else if route.starts_with("api/agent/") {
                     agent.post(&route, &mut request, &active)
                 } else if route.starts_with("api/reply/") {
@@ -270,10 +306,13 @@ pub fn serve(
         }
         let reply = if route.is_none() {
             Reply::error(404, "页面不存在")
-        } else if route == Some("api/mailboxes/reload") {
+        } else if route.is_some_and(|route| {
+            ["api/mailboxes/reload", "api/mailboxes/refresh"]
+                .contains(&route.split('?').next().unwrap_or_default())
+        }) {
             Reply::json(
                 405,
-                serde_json::json!({"error": "刷新邮箱配置需要 POST 请求"}),
+                serde_json::json!({"error": "刷新邮箱需要 POST 请求"}),
             )
         } else if request.method() != &Method::Get && request.method() != &Method::Head {
             Reply::error(405, "仅支持阅读页面及 POST 邮件操作")

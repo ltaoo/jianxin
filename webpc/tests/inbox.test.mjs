@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { ControlCore, MailboxCore, NotificationCore } from '../packages/jxui/core.js';
 import { InboxPageModel, MessageCore } from '../src/pages/inbox/index.model.js';
 import { MailService } from '../src/services.js';
-import { Button, Input, formatDate, RelativeTime, Glyph, NotificationCenter, NavItem, MailboxGroup, ConversationRow } from '../packages/jxui/index.js';
+import { Button, Input, formatDate, RelativeTime, Glyph, NotificationCenter, NavItem, MailboxGroup, ConversationRow, SidebarMoreMenu } from '../packages/jxui/index.js';
 import { MailMessage } from '../packages/jxui/mail-message.js';
 import { InboxPageView } from '../src/pages/inbox/index.js';
 
@@ -354,6 +354,49 @@ test('all mailboxes keep independent folders and global navigation clears accoun
   model.methods.destroy(); model.destroy();
 });
 
+test('per-mailbox refresh syncs only its account, preserves filters and collapsed folders, retries failures and aborts on destruction', async () => {
+  const accounts = ['a', 'b'].map(id => ({ id, email: `${id}@example.com`, folders: [{ id: `${id}-inbox`, name: 'Inbox' }] }));
+  const requests = [], lists = [];
+  let reads = 0;
+  const model = InboxPageModel({ ...environment('?account=a&folder=a-inbox&q=receipt'), service: {
+    async mailboxes() { reads++; return { accounts }; },
+    async threads(query) { lists.push(query); return { threads: [], more: false }; },
+    refreshMailbox(id, signal) { const gate = deferred(); requests.push({ id, signal, gate }); return gate.promise; },
+  } });
+  await model.methods.init();
+  const core = model.methods.mailbox('b'); core.toggle(); core.toggleMenu();
+  model.state.selected.as({ kind: 'thread', id: 'selected-mail' });
+  const first = core.refresh(); core.refresh();
+  assert.deepEqual(requests.map(request => request.id), ['b']);
+  assert.equal(core.state.refreshBusy, true); assert.equal(core.state.menuOpen, false);
+  assert.equal(model.methods.mailbox('a').state.refreshBusy, false);
+  await model.methods.refreshStatuses(); assert.equal(core.state.refreshBusy, true);
+  requests[0].gate.resolve({ status: 'synced' }); await first;
+  assert.equal(core.state.refreshBusy, false); assert.equal(core.state.expanded, false);
+  assert.equal(model.state.account.value, 'a'); assert.equal(model.state.folder.value, 'a-inbox');
+  assert.equal(model.state.query.value, 'receipt'); assert.equal(model.state.selected.value.id, 'selected-mail');
+  assert.equal(lists.at(-1).account, 'a'); assert.equal(lists.at(-1).folder, 'a-inbox');
+  const failed = core.refresh(); requests[1].gate.reject(new Error('连接失败')); await failed;
+  assert.equal(core.state.refreshBusy, false); assert.match(core.state.refreshError, /连接失败/);
+  assert.equal(model.ui.notifications.state.entries[0].id, 'mailbox-refresh-b');
+  const retry = core.refresh(); assert.equal(core.state.refreshError, ''); requests[2].gate.resolve({ status: 'synced' }); await retry;
+  assert.equal(core.state.refreshBusy, false); assert.deepEqual(requests.map(request => request.id), ['b', 'b', 'b']);
+  const pending = core.refresh(); const before = reads;
+  model.methods.destroy(); assert.equal(requests[3].signal.aborted, true);
+  requests[3].gate.resolve({ status: 'synced' }); await pending;
+  assert.equal(reads, before);
+});
+
+test('mailbox refresh service uses the scoped protected POST endpoint', async () => {
+  let call;
+  const service = MailService('/secret', async (url, options) => { call = { url, options }; return { ok: true, json: async () => ({ status: 'synced' }) }; });
+  const controller = new AbortController();
+  await service.refreshMailbox('account-id', controller.signal);
+  assert.equal(call.url, '/secret/api/mailboxes/refresh?account=account-id');
+  assert.equal(call.options.method, 'POST'); assert.equal(call.options.headers['X-Jianxin-Request'], '1');
+  assert.equal(call.options.credentials, 'same-origin'); assert.equal(call.options.signal, controller.signal);
+});
+
 test('status refresh preserves collapsed folders, selection and list; failures retain last status', async () => {
   let status = { state: 'synced', label: '已同步', tone: 'success' }, fail = false, lists = 0;
   const model = InboxPageModel({ ...environment(), service: {
@@ -437,6 +480,46 @@ test('mailbox badges open safe details without selecting an account and recover 
   core.toggleStatus(); core.updateAccount({ ...account, status: { tone: 'success', state: 'synced', label: '已同步' } });
   assert.equal(core.state.problem, ''); assert.equal(core.state.statusOpen, false);
   core.destroy();
+});
+
+test('each mailbox More menu refreshes without selecting or expanding it and cleans up dismissal listeners', () => {
+  const previous = globalThis.document, listeners = new Map(); let selected = 0, refreshed = 0, focused = false;
+  globalThis.document = { addEventListener(name, callback) { listeners.set(name, callback); }, removeEventListener(name) { listeners.delete(name); } };
+  const find = (node, name) => node?.state?.attributes?.n === name ? node : node?.children?.map(child => find(child, name)).find(Boolean);
+  const core = MailboxCore({ id: 'b', email: 'b@example.com', folders: [] }, {
+    click() { selected++; }, refresh(core) { refreshed++; core.set({ menuOpen: false, refreshBusy: true }); },
+  });
+  core.toggle(); core.toggleMenu();
+  const view = MailboxGroup({ store: core, root: '/secret' }, () => null);
+  const trigger = { focus() { focused = true; } }, action = {};
+  const controls = { contains: target => target === trigger || target === action, querySelector: () => trigger };
+  const target = { querySelector(selector) {
+    if (selector === '[data-n="mailbox-more-controls"]') return controls;
+    if (selector === '[data-n="mailbox-more-toggle"]') return trigger;
+    return { contains: () => false };
+  } };
+  try {
+    const panel = find(view, 'mailbox-more-panel');
+    panel.$elm = { get$elm: () => ({ querySelector: () => trigger }) };
+    view.onMounted({ target: { get$elm: () => target } });
+    assert.equal(panel.state.attributes.id, 'mailbox-more-b');
+    assert.match(find(view, 'mailbox-more-toggle').state.attributes['aria-label'], /b@example.com/);
+    listeners.get('pointerdown')({ target: action }); assert.equal(core.state.menuOpen, true);
+    listeners.get('keydown')({ key: 'Escape', preventDefault() {} });
+    assert.equal(core.state.menuOpen, false); assert.equal(focused, true);
+    find(view, 'mailbox-more-toggle').events.onClick({});
+    assert.equal(core.state.expanded, false); assert.equal(selected, 0);
+    listeners.get('pointerdown')({ target: {} }); assert.equal(core.state.menuOpen, false);
+    core.toggleMenu(); const refresh = find(view, 'refresh-mailbox');
+    refresh.events.onClick({ currentTarget: { closest: () => controls } });
+    assert.equal(refreshed, 1); assert.equal(selected, 0); assert.equal(core.state.expanded, false);
+    assert.equal(core.state.menuOpen, false); assert.ok(find(view, 'mailbox-refresh-progress'));
+    core.toggleMenu(); assert.equal(find(view, 'refresh-mailbox').state.attributes.disabled, '');
+    core.refresh(); assert.equal(refreshed, 1);
+    core.set({ refreshBusy: false, refreshError: '刷新失败，请重试。' });
+    assert.ok(find(view, 'mailbox-refresh-error'));
+  } finally { view.onUnmounted(); core.destroy(); globalThis.document = previous; }
+  assert.equal(listeners.size, 0);
 });
 
 test('mailbox status view closes on outside click or Escape and removes document listeners', () => {
@@ -711,24 +794,124 @@ test('jxui uses native controls and never renders disabled="false"', () => {
 
 test('input property updates and its mount subscription is cleaned up', () => {
   const store = ControlCore({ value: 'before' });
-  const input = Input({ store, label: '搜索' }); const target = { value: '' };
-  input.onMounted({ target }); assert.equal(target.value, 'before');
+  const listeners = new Map();
+  const input = Input({ store, label: '搜索' });
+  const target = { value: '', addEventListener(name, listener) { listeners.set(name, listener); }, removeEventListener(name) { listeners.delete(name); } };
+  input.onMounted({ target: { get$elm: () => target } }); assert.equal(target.value, 'before');
   store.set({ value: 'after' }); assert.equal(target.value, 'after');
-  input.onUnmounted(); store.set({ value: 'later' }); assert.equal(target.value, 'after'); store.destroy();
+  target.value = 'typed'; listeners.get('input')({ target }); assert.equal(store.state.value, 'typed');
+  input.onUnmounted(); store.set({ value: 'later' }); assert.equal(target.value, 'typed'); assert.equal(listeners.size, 0); store.destroy();
+});
+
+test('search input sends typed keywords through Enter and the search button, resets paging and clears with Escape', async () => {
+  const env = environment('?account=a&folder=inbox&unread=1&starred=1&page=2');
+  const requests = [];
+  const service = MailService(env.root, async url => {
+    requests.push(new URL(url, env.location.href));
+    return { ok: true, json: async () => ({ threads: [], more: false }) };
+  });
+  const model = InboxPageModel({ ...env, service });
+  const listeners = new Map();
+  const target = { value: '', addEventListener(name, listener) { listeners.set(name, listener); }, removeEventListener(name) { listeners.delete(name); } };
+  const input = Input({ store: model.ui.search, label: '搜索邮件' });
+  input.onMounted({ target: { get$elm: () => target } });
+  let prevented = 0;
+  const type = value => { target.value = value; listeners.get('input')({ target }); };
+  const key = key => listeners.get('keydown')({ key, preventDefault() { prevented++; } });
+  const settle = () => new Promise(resolve => setImmediate(resolve));
+  try {
+    model.state.selected.as({ kind: 'thread', id: 'old-thread' });
+    type('  发票 & receipt  '); key('Enter'); await settle();
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].pathname, '/secret/api/threads');
+    assert.equal(requests[0].searchParams.get('q'), '发票 & receipt');
+    for (const [name, value] of Object.entries({ account: 'a', folder: 'inbox', unread: '1', starred: '1', page: '0' })) {
+      assert.equal(requests[0].searchParams.get(name), value);
+    }
+    assert.equal(model.state.selected.value, null);
+    assert.equal(new URL(env.location.href).searchParams.get('q'), '发票 & receipt');
+    type('sender@example.com'); model.ui.searchButton.click(); await settle();
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].searchParams.get('q'), 'sender@example.com');
+    key('Escape'); await settle();
+    assert.equal(requests.length, 3);
+    assert.equal(requests[2].searchParams.get('q'), '');
+    assert.equal(target.value, ''); assert.equal(model.state.query.value, '');
+    assert.equal(new URL(env.location.href).searchParams.has('q'), false);
+    assert.equal(prevented, 1);
+  } finally { input.onUnmounted(); model.methods.destroy(); }
+  assert.equal(listeners.size, 0);
 });
 
 test('page builds real Timeless VNodes from reusable jxui without a browser', () => {
   const page = InboxPageView(environment());
   assert.equal(page.t, 'view'); assert.ok(page.children.length);
-  const find = node => node?.state?.attributes?.n === 'refresh-mailbox-config' ? node : node?.children?.map(find).find(Boolean);
-  const reload = find(page);
-  assert.equal(reload.state.as, 'button'); assert.equal(reload.state.attributes['aria-label'], '刷新邮箱配置');
+  const find = (node, name) => node?.state?.attributes?.n === name ? node : node?.children?.map(child => find(child, name)).find(Boolean);
+  const actions = find(page, 'sidebar-actions');
+  assert.deepEqual(actions.children.map(node => node.state.attributes.n), ['import-mailbox-config', 'sidebar-more']);
+  assert(actions.children[0].state.styleSet.includes('jx-button--secondary'));
+  const more = find(page, 'sidebar-more-toggle');
+  assert.equal(more.state.as, 'button'); assert.equal(more.state.attributes['aria-expanded'], 'false');
+  assert.equal(find(page, 'refresh-mailbox-config'), undefined);
+  assert.equal(find(page, 'sync-logs-navigation'), undefined);
+  const text = node => node?.t === 'text' ? String(node.state.value) : (node?.children || []).map(text).join(' ');
+  assert(!text(page).includes('本地邮件阅读器')); assert(!text(page).includes('后台自动收信'));
+  assert(!text(page).includes('JIANXIN · 邮件工作区')); assert(!text(page).includes('专注于每一封邮件'));
   const navigation = page.children[0].children[1].children;
   assert.deepEqual(navigation.slice(0, 3).map(node => node.state.attributes.n), ['mail-navigation-all', 'mail-navigation-unread', 'mail-navigation-starred']);
-  const version = page.children[0].children[2].children.find(node => node.state.attributes?.n === 'app-version');
-  assert.equal(version.state.as, 'p');
+  const brand = find(page, 'app-brand-copy');
+  assert.deepEqual(brand.children.map(node => node.state.attributes.n), ['app-brand-name', 'app-version']);
+  const version = find(brand, 'app-version');
+  assert.equal(version.state.as, 'span');
+  assert.equal(find(page.children[0].children[2], 'app-version'), undefined);
   assert.equal(version.children[1].state.value, JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url))).version);
   // This test does not mount the page or invoke any browser APIs.
+});
+
+test('sidebar More supports keyboard and outside dismissal, keeps logs scoped and invokes configuration refresh', async () => {
+  const previous = globalThis.document, documentListeners = new Map(), targetListeners = new Map();
+  const find = (node, name) => node?.state?.attributes?.n === name ? node : node?.children?.map(child => find(child, name)).find(Boolean);
+  let reloads = 0, focused;
+  const model = InboxPageModel({ ...environment(), service: {
+    async reloadMailboxes() { reloads++; return { accounts: [] }; },
+    async threads() { return { threads: [], more: false }; },
+  } });
+  globalThis.document = { activeElement: null,
+    addEventListener(name, callback) { documentListeners.set(name, callback); }, removeEventListener(name) { documentListeners.delete(name); } };
+  const item = name => ({ focus() { focused = name; document.activeElement = this; } });
+  const trigger = item('trigger'), first = item('refresh'), second = item('logs');
+  const target = { contains: value => [trigger, first, second].includes(value),
+    querySelector: () => trigger, querySelectorAll: () => [first, second],
+    addEventListener(name, callback) { targetListeners.set(name, callback); }, removeEventListener(name) { targetListeners.delete(name); } };
+  model.ui.sidebarMore.click();
+  const view = SidebarMoreMenu({ store: model.ui.sidebarMore, reload: model.ui.reloadMailboxes, root: '/secret' });
+  try {
+    const panel = find(view, 'sidebar-more-panel');
+    panel.$elm = { get$elm: () => ({ querySelector: () => first }) };
+    view.onMounted({ target: { get$elm: () => target } });
+    assert.equal(focused, 'refresh');
+    assert.equal(find(view, 'sidebar-more-toggle').state.attributes['aria-expanded'], 'true');
+    const logs = find(view, 'sync-logs-navigation');
+    assert.equal(logs.state.as, 'a'); assert.equal(logs.state.attributes.href, '/secret/logs');
+    const key = key => targetListeners.get('keydown')({ key, preventDefault() {}, stopPropagation() {} });
+    key('ArrowDown'); assert.equal(focused, 'logs');
+    document.activeElement = trigger; key('ArrowUp'); assert.equal(focused, 'logs');
+    key('Home'); assert.equal(focused, 'refresh'); key('End'); assert.equal(focused, 'logs');
+    key('Escape'); assert.equal(model.ui.sidebarMore.state.open, false); assert.equal(focused, 'trigger');
+    model.ui.sidebarMore.click(); documentListeners.get('pointerdown')({ target: first });
+    assert.equal(model.ui.sidebarMore.state.open, true);
+    documentListeners.get('pointerdown')({ target: {} }); assert.equal(model.ui.sidebarMore.state.open, false);
+    model.ui.sidebarMore.click(); documentListeners.get('focusin')({ target: {} });
+    assert.equal(model.ui.sidebarMore.state.open, false);
+    model.ui.sidebarMore.click(); logs.events.onClick(); assert.equal(model.ui.sidebarMore.state.open, false);
+    model.ui.sidebarMore.click();
+    const refresh = find(view, 'refresh-mailbox-config');
+    refresh.events.onClick({}); assert.equal(model.ui.sidebarMore.state.open, false);
+    assert.equal(reloads, 1); assert.equal(refresh.state.attributes.disabled, '');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(model.ui.reloadMailboxes.state.disabled, false);
+  } finally { view.onUnmounted(); model.methods.destroy(); globalThis.document = previous; }
+  assert.equal(documentListeners.size, 0); assert.equal(targetListeners.size, 0);
 });
 
 
@@ -772,6 +955,7 @@ test('official Timeless icons resolve from the framework registry', () => {
   for (const name of ['mail', 'inbox', 'sent', 'drafts', 'archive', 'trash', 'spam', 'custom', 'unread', 'refresh', 'search', 'notification', 'attachment']) {
     const icon = Glyph(name).children[0];
     assert.equal(icon.t, 'icon');
+    if (name === 'notification') assert.equal(icon.state.name, 'bell');
     assert.equal(Timeless.getIconRegistry()[icon.state.name].tag, 'svg');
     icon.onUnmounted();
   }

@@ -578,6 +578,64 @@ mod tests {
         std::fs::remove_dir_all(directory).unwrap();
     }
     #[test]
+    fn thread_search_matches_sender_email_even_when_sender_has_a_display_name() {
+        let (app, mut message) = super::super::tests::fixture();
+        message.from = vec![jianxin_domain::Address::with_name(
+            "财务通知",
+            "billing+notice_01@example.com",
+        )];
+        message.to = vec![jianxin_domain::Address::new("receiver-only@example.net")];
+        let mut other = message.clone();
+        other.id = "other-sender".into();
+        other.remote_id = "2".into();
+        other.subject = "Unrelated mail".into();
+        other.from = vec![jianxin_domain::Address::with_name(
+            "其他发件人",
+            "other@example.org",
+        )];
+        {
+            let conn = app.db().lock();
+            other.thread_id = Some(
+                jianxin_store::thread_repo::create(&conn, &other.account_id, &other.subject)
+                    .unwrap(),
+            );
+            jianxin_store::message_repo::upsert_many(&conn, &[message.clone(), other]).unwrap();
+        }
+        for query in [
+            "billing+notice_01@example.com",
+            "BILLING+NOTICE_01@EXAMPLE.COM",
+            "billing+notice",
+            "@example.com",
+            "_01",
+            "财务通知",
+        ] {
+            let params = ammonia::url::form_urlencoded::Serializer::new(String::new())
+                .append_pair("q", query)
+                .finish();
+            let response = render(&app, "/secret", &format!("api/threads?{params}")).unwrap();
+            let value: serde_json::Value = serde_json::from_str(&response.body).unwrap();
+            let threads = value["threads"].as_array().unwrap();
+            assert_eq!(threads.len(), 1, "query: {query}");
+            assert_eq!(threads[0]["id"], *message.thread_id.as_ref().unwrap());
+            assert_eq!(threads[0]["sender"], "财务通知");
+        }
+        for query in [
+            "missing@example.com",
+            "receiver-only@example.net",
+            "billing+noticeX01",
+        ] {
+            let params = ammonia::url::form_urlencoded::Serializer::new(String::new())
+                .append_pair("q", query)
+                .finish();
+            let response = render(&app, "/secret", &format!("api/threads?{params}")).unwrap();
+            let value: serde_json::Value = serde_json::from_str(&response.body).unwrap();
+            assert!(
+                value["threads"].as_array().unwrap().is_empty(),
+                "query: {query}"
+            );
+        }
+    }
+    #[test]
     fn api_filters_are_bounded_and_never_return_credentials_or_bodies() {
         let (app, message) = super::super::tests::fixture();
         let result = render(&app, "/secret", "api/mailboxes").unwrap();

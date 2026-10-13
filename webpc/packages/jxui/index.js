@@ -23,13 +23,59 @@ export function Input({ store, label, placeholder = '', ...rest }) {
   return View({ ...rest, as: 'input', class: `jx-input ${rest.class || ''}`,
     attributes: { type: 'search', 'aria-label': label, placeholder,
       value: b.derive( s => s.value), disabled: b.derive( s => s.disabled ? '' : undefined) },
-    onInput(e) { store.input(e.target.value); },
-    onKeyDown(e) { store.keydown(e); },
-    onMounted({ target }) {
+    onMounted({ target: host }) {
+      const target = host.get$elm?.() || host;
       const apply = () => { if (target.value !== store.state.value) target.value = store.state.value; };
+      const input = event => store.input(event.target.value);
+      const keydown = event => store.keydown(event);
       apply(); off = store.onStateChange(apply);
+      // The vendored View runtime does not forward native input events.
+      target.addEventListener('input', input);
+      target.addEventListener('keydown', keydown);
+      const stop = off;
+      off = () => { stop(); target.removeEventListener('input', input); target.removeEventListener('keydown', keydown); };
     }, onUnmounted() { off(); b.cleanup(); },
   });
+}
+export function SidebarMoreMenu({ store, reload, root = '' }) {
+  const b = binding(store), refresh = binding(reload);
+  const refreshLabel = refresh.derive(s => s.label), refreshDisabled = refresh.derive(s => s.disabled ? '' : undefined);
+  let target, detach = () => {};
+  const dismiss = () => { target?.querySelector('[data-n="sidebar-more-toggle"]')?.focus(); store.close(); };
+  return View({ class: 'jx-sidebar-more', attributes: { n: 'sidebar-more' },
+    onMounted({ target: host }) {
+      target = host.get$elm?.() || host;
+      const outside = event => { if (!target.contains(event.target)) store.close(); };
+      const keydown = event => {
+        if (!store.state.open) return;
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); dismiss(); }
+        if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+          const items = Array.from(target.querySelectorAll('.jx-mail-menu-action')).filter(item => !item.disabled);
+          if (!items.length) return;
+          event.preventDefault();
+          const index = items.indexOf(document.activeElement);
+          const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+            : index < 0 ? (event.key === 'ArrowDown' ? 0 : items.length - 1)
+              : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+          items[next].focus();
+        }
+      };
+      document.addEventListener('pointerdown', outside); document.addEventListener('focusin', outside);
+      target.addEventListener('keydown', keydown);
+      detach = () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('focusin', outside); target.removeEventListener('keydown', keydown); };
+    }, onUnmounted() { detach(); b.cleanup(); refresh.cleanup(); } }, [
+    Button({ store, variant: 'ghost', icon: 'more', attributes: { n: 'sidebar-more-toggle',
+      'aria-expanded': b.derive(s => String(s.open)), 'aria-controls': 'sidebar-more-panel' } }),
+    Show({ when: b.derive(s => s.open), ok: () => View({ as: 'nav', class: 'jx-mail-menu jx-sidebar-more-menu',
+      attributes: { n: 'sidebar-more-panel', id: 'sidebar-more-panel', 'aria-label': '更多邮箱操作' },
+      onMounted({ target: host }) { (host.get$elm?.() || host).querySelector('button:not(:disabled), a')?.focus(); } }, [
+      View({ as: 'button', class: 'jx-mail-menu-action', attributes: { n: 'refresh-mailbox-config', type: 'button',
+        disabled: refreshDisabled, 'aria-label': refreshLabel },
+        onClick(event) { dismiss(); reload.click(event); } }, [Glyph('refresh'), refreshLabel]),
+      View({ as: 'a', class: 'jx-mail-menu-action', attributes: { n: 'sync-logs-navigation', href: `${root}/logs` },
+        onClick: dismiss }, [Glyph('clock'), '同步日志']),
+    ]) }),
+  ]);
 }
 export function Badge({}, children) { return View({ as: 'span', class: 'jx-badge', attributes: { n: 'count-badge' } }, children); }
 export function Avatar({ name }) {
@@ -42,7 +88,7 @@ const iconNames = {
   unread: 'message-square-more', starred: 'star', refresh: 'refresh-cw', back: 'arrow-left', close: 'x',
   search: 'search', menu: 'menu', next: 'chevron-right', prev: 'chevron-left',
   check: 'check', image: 'image', text: 'file-text', attachment: 'paperclip',
-  notification: 'message-square-more', clock: 'clock-3', server: 'server', user: 'user', privacy: 'eye', loading: 'loader-circle',
+  notification: 'bell', clock: 'clock-3', server: 'server', user: 'user', privacy: 'eye', loading: 'loader-circle',
   more: 'ellipsis-vertical', reply: 'undo-2', expand: 'maximize',
 };
 let iconsRegistered = false;
@@ -162,6 +208,11 @@ export function MailboxGroup({ store, root = '' }, folders) {
   const opened = b.derive(s => s.statusOpen);
   const icon = b.derive(s => s.platformIcon);
   const items = b.derive(s => s.folders || []);
+  const menuOpen = b.derive(s => s.menuOpen);
+  const refreshing = b.derive(s => s.refreshBusy);
+  const refreshError = b.derive(s => s.refreshError);
+  const refreshLabel = b.derive(s => s.refreshBusy ? '正在刷新…' : '刷新');
+  const refreshDisabled = b.derive(s => s.refreshBusy ? '' : undefined);
   function oauthField(field, label) {
     return View({ as: 'label', class: 'jx-import-field' }, [View({ as: 'span' }, [label]),
       View({ as: 'input', class: 'jx-input', attributes: { n: `mailbox-oauth-${field}`, type: field === 'token_endpoint' ? 'url' : 'text',
@@ -178,17 +229,24 @@ export function MailboxGroup({ store, root = '' }, folders) {
   let detach = () => {};
   return View({ as: 'section', class: 'jx-mailbox-group',
     attributes: { n: 'mailbox-group', 'aria-label': email },
-    onMounted({ target }) {
+    onMounted({ target: host }) {
+      const target = host.get$elm?.() || host;
       function outside(event) {
         if (!target.querySelector('.jx-mailbox-icon')?.contains(event.target) && !target.querySelector('.jx-mailbox-status-popover')?.contains(event.target)) store.closeStatus();
+        if (!target.querySelector('[data-n="mailbox-more-controls"]')?.contains?.(event.target)) store.closeMenu();
       }
       function escape(event) {
+        if (event.key === 'Escape' && store.state.menuOpen) {
+          event.preventDefault(); store.closeMenu(); target.querySelector('[data-n="mailbox-more-toggle"]')?.focus();
+        }
         if (event.key === 'Escape' && store.state.statusOpen) {
-          store.closeStatus(); target.querySelector('[n="mailbox-status-trigger"]')?.focus();
+          store.closeStatus(); target.querySelector('[data-n="mailbox-status-trigger"]')?.focus();
         }
       }
+      const blur = event => { if (!target.querySelector('[data-n="mailbox-more-controls"]')?.contains?.(event.target)) store.closeMenu(); };
       document.addEventListener('keydown', escape); document.addEventListener('pointerdown', outside);
-      detach = () => { document.removeEventListener('keydown', escape); document.removeEventListener('pointerdown', outside); };
+      document.addEventListener('focusin', blur);
+      detach = () => { document.removeEventListener('keydown', escape); document.removeEventListener('pointerdown', outside); document.removeEventListener('focusin', blur); };
     }, onUnmounted() { detach(); b.cleanup(); },
   }, [View({ class: 'jx-mailbox-header', attributes: { n: 'mailbox-header' } }, [
     View({ as: 'button', class: b.derive(s => `jx-mailbox-toggle ${s.expanded ? 'is-open' : ''}`),
@@ -212,8 +270,26 @@ export function MailboxGroup({ store, root = '' }, folders) {
       ]),
       View({ as: 'button', class: b.derive(s => `jx-mailbox-identity ${s.active ? 'is-active' : ''}`),
         attributes: { n: 'select-mailbox', type: 'button', title: email, 'aria-current': b.derive(s => s.active ? 'true' : undefined) },
-        onClick(e) { store.closeStatus(); store.click(e); },
+        onClick(e) { store.closeStatus(); store.closeMenu(); store.click(e); },
       }, [View({ as: 'strong', class: 'jx-truncate', attributes: { n: 'mailbox-email' } }, [email])]),
+    ]),
+    View({ class: 'jx-mailbox-more', attributes: { n: 'mailbox-more-controls' }, onKeyDown(event) {
+      if (['ArrowDown', 'ArrowUp'].includes(event.key)) {
+        event.preventDefault();
+        if (!store.state.menuOpen) store.toggleMenu();
+        else event.currentTarget.querySelector('[data-n="refresh-mailbox"]:not(:disabled)')?.focus();
+      }
+    } }, [
+      View({ as: 'button', class: 'jx-button jx-button--ghost jx-icon-button', attributes: {
+        n: 'mailbox-more-toggle', type: 'button', title: '更多', 'aria-label': b.derive(s => `${s.email} 的更多操作`),
+        'aria-expanded': b.derive(s => String(s.menuOpen)), 'aria-controls': `mailbox-more-${store.state.id}`,
+      }, onClick() { store.toggleMenu(); } }, [Glyph('more')]),
+      Show({ when: menuOpen, ok: () => View({ as: 'nav', class: 'jx-mail-menu jx-mailbox-more-menu',
+        attributes: { n: 'mailbox-more-panel', id: `mailbox-more-${store.state.id}`, 'aria-label': `${store.state.email} 的更多操作` },
+        onMounted({ target: host }) { (host.get$elm?.() || host).querySelector('button:not(:disabled)')?.focus(); } }, [
+        View({ as: 'button', class: 'jx-mail-menu-action', attributes: { n: 'refresh-mailbox', type: 'button', disabled: refreshDisabled },
+          onClick(event) { event.currentTarget.closest('[data-n="mailbox-more-controls"]').querySelector('[data-n="mailbox-more-toggle"]').focus(); store.refresh(); } }, [Glyph('refresh'), refreshLabel]),
+      ]) }),
     ]),
     Show({ when: opened, ok: () => View({ as: 'div', class: 'jx-mailbox-status-popover',
       attributes: { n: 'mailbox-status-details', id: `mailbox-status-${store.state.id}`, role: 'status', 'aria-live': 'polite' },
@@ -240,7 +316,9 @@ export function MailboxGroup({ store, root = '' }, folders) {
         Show({ when: b.derive(s => s.oauth.state === 'complete' && !s.oauth.error), ok: () => View({ as: 'p', attributes: { n: 'mailbox-oauth-complete' } }, ['授权成功，正在更新邮箱状态。']) }),
       ]) }),
     ]) }),
-  ]), Show({ when: expanded, ok: () => View({ class: 'jx-mailbox-folders',
+  ]), Show({ when: refreshing, ok: () => View({ as: 'p', class: 'jx-sidebar-refresh-status jx-muted', attributes: { n: 'mailbox-refresh-progress', role: 'status' } }, ['正在刷新邮箱…']) }),
+    Show({ when: refreshError, ok: () => View({ as: 'p', class: 'jx-sidebar-refresh-status jx-error', attributes: { n: 'mailbox-refresh-error', role: 'status' } }, [refreshError]) }),
+    Show({ when: expanded, ok: () => View({ class: 'jx-mailbox-folders',
     attributes: { n: 'mailbox-folders', id: `folders-${store.state.id}` },
   }, [For({ each: items, render(folder) { return folders(folder, store.state.id); } })]) })]);
 }

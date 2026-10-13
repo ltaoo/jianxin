@@ -36,15 +36,34 @@ enum Update {
     Error(String),
 }
 struct DesktopHooks {
-    sync: mpsc::Sender<()>,
+    sync: mpsc::Sender<SyncRequest>,
     snapshot: mpsc::Sender<()>,
     enabled: bool,
 }
+enum SyncRequest {
+    All,
+    Account {
+        id: String,
+        finished: mpsc::Sender<std::result::Result<(), String>>,
+    },
+}
 impl RuntimeHooks for DesktopHooks {
+    fn refresh_account(&self, account_id: &str) -> Result<bool> {
+        let (finished, result) = mpsc::channel();
+        self.sync.send(SyncRequest::Account {
+            id: account_id.into(),
+            finished,
+        })?;
+        result
+            .recv()
+            .context("后台收信线程已停止")?
+            .map_err(|error| anyhow::anyhow!(error))?;
+        Ok(true)
+    }
     fn config_changed(&self, _config: &Path, _data: &Path) -> Result<bool> {
         self.snapshot.send(())?;
         if self.enabled {
-            self.sync.send(())?;
+            self.sync.send(SyncRequest::All)?;
         }
         Ok(self.enabled)
     }
@@ -86,16 +105,7 @@ fn run() -> Result<()> {
     let config_path = std::fs::canonicalize(config_path)?;
     let app = App::new(config.clone())?;
     if std::env::var_os("JIANXIN_DESKTOP_HEADLESS").is_some() {
-        return jianxin_web::serve(
-            app,
-            &config_path,
-            None,
-            0,
-            None,
-            false,
-            0,
-            ServiceControl::default(),
-        );
+        return jianxin_web::serve_desktop(app, &config_path, ServiceControl::default());
     }
     let data_dir = config.data_dir();
     let Some(_instance_lock) = instance::lock(&data_dir)? else {
@@ -128,7 +138,7 @@ fn run() -> Result<()> {
     let server_shutdown = shutdown.clone();
     let server = std::thread::spawn(move || {
         if let Err(error) =
-            jianxin_web::serve(app, &server_config, None, 0, None, false, 0, server_control)
+            jianxin_web::serve_desktop(app, &server_config, server_control)
         {
             eprintln!("Web service: {error:#}");
             let _ =
@@ -193,9 +203,15 @@ fn run() -> Result<()> {
                     + Duration::from_secs(watcher_app.config().general.watch.interval_secs.max(5));
             }
             match sync_incoming.recv_timeout(Duration::from_secs(1)) {
-                Ok(()) => {
+                Ok(SyncRequest::All) => {
                     next_poll = Instant::now();
-                    while sync_incoming.try_recv().is_ok() {}
+                }
+                Ok(SyncRequest::Account { id, finished }) => {
+                    let result = reload_accounts(&mut watcher_app, &watcher_config, &mut modified)
+                        .and_then(|_| poller.tick_account(&watcher_app, &id))
+                        .map_err(|error| error.to_string());
+                    let _ = watcher_snapshots.send(());
+                    let _ = finished.send(result);
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -292,7 +308,7 @@ fn run() -> Result<()> {
     shutdown::arm_exit_fallback();
     shutdown.store(true, Ordering::SeqCst);
     let _ = hooks.snapshot.send(());
-    let _ = hooks.sync.send(());
+    let _ = hooks.sync.send(SyncRequest::All);
     drop(desktop);
     drop(hooks);
     drop(open);
@@ -324,6 +340,28 @@ fn open_url(app: &App, root: &str, request: &OpenRequest) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mailbox_refresh_waits_for_a_single_account_request_without_scheduling_all_accounts() {
+        let (sync, requests) = mpsc::channel();
+        let (snapshot, _snapshots) = mpsc::channel();
+        let hooks = DesktopHooks {
+            sync,
+            snapshot,
+            enabled: false,
+        };
+        let worker = std::thread::spawn(move || {
+            match requests.recv().unwrap() {
+                SyncRequest::Account { id, finished } => {
+                    assert_eq!(id, "selected-account");
+                    finished.send(Ok(())).unwrap();
+                }
+                SyncRequest::All => panic!("must refresh only the selected mailbox"),
+            }
+            assert!(requests.try_recv().is_err());
+        });
+        assert!(hooks.refresh_account("selected-account").unwrap());
+        worker.join().unwrap();
+    }
     #[test]
     fn mail_menu_links_to_exact_mailbox_folder_and_mail_without_marking_read() {
         use jianxin_domain::{Folder, FolderKind, Message};

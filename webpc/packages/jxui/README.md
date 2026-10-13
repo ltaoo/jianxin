@@ -23,6 +23,7 @@ NavItem 接受 icon / count。ConversationRow 接受线程摘要和导航 Core�
 MailboxGroup 接受 MailboxCore、服务 root 和文件夹渲染函数，显示邮箱名称、平台 SVG 图标及可独立折叠的文件夹。
 MailboxCore 按 platform → provider 选择图标，正常状态不显示文字，异常角标点击后显示脱敏提示；
 提示开关由 Core 维护。状态及配置更新保留文件夹展开状态，不重建文件夹视图。
+每个 MailboxGroup 的更多菜单提供单邮箱刷新，使用页面 Model 的 refreshMailbox 方法；进度与错误保存在对应 Core，刷新期间禁用重复操作，菜单支持键盘与外部点击关闭。
 Panel 的 kind 为 sidebar / list / reader。Toolbar、Badge、Avatar 和 EmptyState
 为无状态组件。MailMessage 使用页面的 MessageCore，控制展开、已读同步和
 正文选项，并在卸载时清理 ResizeObserver、动画帧和事件监听。

@@ -31,6 +31,9 @@ export function MailService(root, request = fetch) {
     reloadMailboxes: signal => json('api/mailboxes/reload', {
       method: 'POST', headers: { 'X-Jianxin-Request': '1' }, signal,
     }),
+    refreshMailbox: (id, signal) => json(`api/mailboxes/refresh?${new URLSearchParams({ account: id })}`, {
+      method: 'POST', headers: { 'X-Jianxin-Request': '1' }, signal,
+    }),
     startOAuth: (id, signal) => json(`api/mailboxes/oauth?${new URLSearchParams({ account: id })}`, {
       method: 'POST', headers: { 'X-Jianxin-Request': '1' }, signal,
     }),

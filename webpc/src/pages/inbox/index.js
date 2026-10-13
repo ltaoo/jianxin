@@ -1,7 +1,7 @@
 import { AgentCore } from '../../../packages/jxui/agent-core.js';
 import { AgentPanel } from '../../../packages/jxui/agent-panel.js';
 import { AgentService } from '../../services.js';
-import { Button, Input, MailboxGroup, NavItem, Panel, Toolbar, EmptyState, ConversationRow, Badge, Glyph, NotificationCenter } from '../../../packages/jxui/index.js';
+import { Button, Input, MailboxGroup, NavItem, Panel, Toolbar, EmptyState, ConversationRow, Badge, Glyph, NotificationCenter, SidebarMoreMenu } from '../../../packages/jxui/index.js';
 import { ControlCore } from '../../../packages/jxui/core.js';
 import { MailMessage } from '../../../packages/jxui/mail-message.js';
 import { ReplyWindow } from '../../../packages/jxui/reply-window.js';
@@ -38,7 +38,13 @@ export function InboxPageView(props) {
   }
   function Sidebar() {
     return Panel({ kind: 'sidebar', as: 'aside', attributes: { 'aria-label': '邮箱导航' } }, [
-      View({ class: 'jx-brand', attributes: { n: 'app-brand' } }, [View({ as: 'img', class: 'jx-brand-mark', attributes: { n: 'app-logo', src: `${props.root}/assets/jianxin-logo.svg`, alt: '简信' } }), View({ class: 'jx-brand-copy', attributes: { n: 'app-brand-copy' } }, [View({ as: 'strong', attributes: { n: 'app-brand-name' } }, ['简信']), View({ as: 'span', attributes: { n: 'app-brand-description' } }, ['JIANXIN · 邮件工作区'])])]),
+      View({ class: 'jx-brand', attributes: { n: 'app-brand' } }, [
+        View({ as: 'img', class: 'jx-brand-mark', attributes: { n: 'app-logo', src: `${props.root}/assets/jianxin-logo.svg`, alt: '简信' } }),
+        View({ class: 'jx-brand-copy', attributes: { n: 'app-brand-copy' } }, [
+          View({ as: 'strong', attributes: { n: 'app-brand-name' } }, ['简信']),
+          View({ as: 'span', class: 'jx-brand-version', attributes: { n: 'app-version', 'aria-label': computed(s.version, version => `版本 ${version}`) } }, ['v', s.version]),
+        ]),
+      ]),
       View({ as: 'nav', class: 'jx-navigation' }, [
         nav(ui.all, s.folder, value => !s.account.value && !value && !s.unread.value && !s.starred.value, 'all'),
         nav(ui.unread, s.unread, value => !s.account.value && value && !s.starred.value, 'unread'),
@@ -54,13 +60,11 @@ export function InboxPageView(props) {
         } }),
       ]),
       View({ class: 'jx-sidebar-footer', attributes: { n: 'mailbox-sidebar-footer' } }, [
-        Button({ store: ui.importMailboxes, variant: 'primary', icon: 'mail', attributes: { n: 'import-mailbox-config' } }),
-        Button({ store: ui.reloadMailboxes, variant: 'ghost', attributes: { n: 'refresh-mailbox-config' } }),
-        View({ as: 'a', class: 'jx-button jx-button--ghost', attributes: { n: 'sync-logs-navigation', href: `${props.root}/logs` } }, [Glyph('clock'), '同步日志']),
-        Show({ when: s.configStatus, ok: () => View({ as: 'p', class: 'jx-muted', attributes: { n: 'mailbox-config-feedback', role: 'status' } }, [s.configStatus]) }),
-        View({ class: 'jx-row' }, [Glyph('server'), '本地邮件阅读器']),
-        View({ as: 'p', class: 'jx-muted', attributes: { n: 'app-version' } }, ['版本 ', s.version]),
-        View({ as: 'p', class: 'jx-muted' }, ['后台自动收信，刷新查看新邮件。'])]),
+        View({ class: 'jx-sidebar-actions', attributes: { n: 'sidebar-actions' } }, [
+          Button({ store: ui.importMailboxes, variant: 'secondary', attributes: { n: 'import-mailbox-config' } }),
+          SidebarMoreMenu({ store: ui.sidebarMore, reload: ui.reloadMailboxes, root: props.root }),
+        ]),
+        Show({ when: s.configStatus, ok: () => View({ as: 'p', class: 'jx-muted', attributes: { n: 'mailbox-config-feedback', role: 'status' } }, [s.configStatus]) })]),
     ]);
   }
   function List() {
@@ -76,7 +80,7 @@ export function InboxPageView(props) {
         } }),
         Show({ when: combine({ loading: s.loading, threads: s.threads, error: s.error }, d => !d.loading && !d.error && !d.threads.length), ok: () => EmptyState({
           title: combine({ query: s.query, starred: s.starred }, d => d.query ? '没有找到匹配的邮件' : d.starred ? '暂无收藏邮件' : '这里还没有邮件'),
-          description: combine({ query: s.query, starred: s.starred }, d => d.query ? '试试其他主题、发件人或摘要关键词。' : d.starred ? '打开邮件，点击“收藏”即可在这里查看。' : '后台同步完成后，点击刷新查看本地邮件。'),
+          description: combine({ query: s.query, starred: s.starred }, d => d.query ? '试试其他主题、发件人姓名、邮箱地址或摘要关键词。' : d.starred ? '打开邮件，点击“收藏”即可在这里查看。' : '后台同步完成后，点击刷新查看本地邮件。'),
         }) }),
       ]),
       Toolbar({ class: 'jx-pagination', attributes: { 'aria-label': '对话分页' } }, [
@@ -126,13 +130,14 @@ export function InboxPageView(props) {
     onUnmounted() { agent.destroy(); agentToggle.destroy(); offAgentScope(); clearInterval(statusTimer); document.removeEventListener('visibilitychange', refreshStatuses); window.removeEventListener('popstate', methods.restore); derived.forEach(value => value.destroy()); methods.destroy(); vm.destroy(); },
   }, [Sidebar(), View({ class: 'jx-workspace' }, [
     Toolbar({ as: 'header', class: 'jx-header' }, [Button({ store: ui.menu, variant: 'ghost', icon: 'menu', class: 'jx-menu-button' }, []),
-      View({ as: 'form', class: 'jx-search', attributes: { role: 'search' }, onMounted({ target }) {
+      View({ as: 'form', class: 'jx-search', attributes: { role: 'search' }, onMounted({ target: host }) {
+        const target = host.get$elm?.() || host;
         target.addEventListener('submit', submit);
         function submit(e) { e.preventDefault(); methods.search(); }
         cleanupSearch = () => target.removeEventListener('submit', submit);
-      }, onUnmounted() { cleanupSearch(); } }, [Glyph('search'), Input({ store: ui.search, label: '搜索邮件', placeholder: '搜索主题、发件人或邮件摘要…' }),
+      }, onUnmounted() { cleanupSearch(); } }, [Glyph('search'), Input({ store: ui.search, label: '搜索邮件', placeholder: '搜索主题、发件人姓名、邮箱地址或摘要…' }),
         Button({ store: ui.searchButton, variant: 'ghost', icon: 'search', class: 'jx-icon-button' }, [])]),
-      View({ class: 'jx-header-caption jx-row jx-muted' }, [Glyph('clock'), '专注于每一封邮件']), NotificationCenter({ store: ui.notifications }), Button({ store: agentToggle, icon: 'agent', variant: 'ghost' }),
+      NotificationCenter({ store: ui.notifications }), Button({ store: agentToggle, icon: 'agent', variant: 'ghost' }),
     ]),
     View({ class: 'jx-main-row' }, [View({ class: 'jx-split' }, [List(), Show({ when: selected, ok: Reader })]), AgentPanel({ store: agent })]),
   ]), ReplyWindow({ store: ui.reply }), ConfigImport({ store: ui.configImport, root: props.root })]);

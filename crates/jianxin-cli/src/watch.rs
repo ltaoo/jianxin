@@ -71,7 +71,16 @@ pub struct Poller {
 
 impl Poller {
     pub fn tick(&mut self, app: &App) -> Result<()> {
-        let accounts = accounts_to_watch(app, None)?;
+        self.tick_selected(app, None)
+    }
+
+    pub fn tick_account(&mut self, app: &App, account_id: &str) -> Result<()> {
+        self.tick_selected(app, Some(account_id))
+    }
+
+    fn tick_selected(&mut self, app: &App, selector: Option<&str>) -> Result<()> {
+        let accounts = accounts_to_watch(app, selector)?;
+        let mut failure = None;
         for cfg in &accounts {
             let account = cfg.to_account();
             let result = poll_account(app, cfg, &mut self.baselined);
@@ -79,6 +88,7 @@ impl Poller {
             app.record_sync_status(&account.id, error.as_deref());
             if let Err(error) = result {
                 eprintln!("watch {}: {error}", account.email);
+                failure = Some(error);
             }
         }
         let options = Options {
@@ -97,6 +107,11 @@ impl Poller {
             &options,
         )?;
         app.db().release_idle_memory()?;
+        if selector.is_some() {
+            if let Some(error) = failure {
+                return Err(error);
+            }
+        }
         Ok(())
     }
 }

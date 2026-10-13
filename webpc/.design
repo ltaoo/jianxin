@@ -1,9 +1,9 @@
 {
   "schema": "design.v1",
   "name": "jianxin-jxui",
-  "version": "1.9.0",
+  "version": "1.12.0",
   "status": "evolve",
-  "updated_at": "2026-10-12",
+  "updated_at": "2026-10-13",
   "agent": {
     "skill": "design",
     "instructions": "Read this contract before UI changes. Build pages with jxui components and Timeless store-driven models. Bind tokens; update the catalog when adding components; verify CSS against tokens. Never automate a browser."
@@ -275,7 +275,7 @@
       "textColor": "{tokens.color.text}",
       "typography": "{tokens.type.control}",
       "height": "{tokens.layout.target}",
-      "behavior": "Choose favicon from explicit account platform, otherwise provider. Warning/error states show a clickable badge on the icon; clicking opens safe status details, outside click or Escape closes them, and recovery removes the badge. OAuth-required details include missing application ID/endpoint setup, a login button, device code and HTTPS verification link. Retain OAuth mailboxes before credentials exist and mark them pending immediately. Saving application settings never starts login; start only on explicit click, prevent duplicate starts, poll until done and refresh account configuration after credentials are stored. Unknown platforms use the generic mailbox icon. Preserve folder expansion, edited setup fields and selection during refresh."
+      "behavior": "Choose favicon from explicit account platform, otherwise provider. Warning/error states show a clickable badge on the icon; clicking opens safe status details, outside click or Escape closes them, and recovery removes the badge. OAuth-required details include missing application ID/endpoint setup, a login button, device code and HTTPS verification link. Retain OAuth mailboxes before credentials exist and mark them pending immediately. Saving application settings never starts login; start only on explicit click, prevent duplicate starts, poll until done and refresh account configuration after credentials are stored. Unknown platforms use the generic mailbox icon. Preserve folder expansion, edited setup fields and selection during refresh. Add a sibling More button for each mailbox with Refresh. Refresh only the owning account through a protected POST and the desktop polling worker; retain selected mailbox, folder, query and collapsed state. Keep per-account pending/error state across status updates, disable duplicate requests, expose progress and retryable errors, and dismiss with Escape, outside click or focus change. Menu and refresh must not select the mailbox."
     },
     "Glyph": {
       "when": "Semantic UI icons via Timeless.Icon and the selected @timeless/inner-icons ASN registry",
@@ -284,7 +284,8 @@
     "NotificationCenter": {
       "when": "Bounded error history, unread count, per-item read/unread and read all",
       "backgroundColor": "{tokens.color.canvas}",
-      "rounded": "{tokens.radius.panel}"
+      "rounded": "{tokens.radius.panel}",
+      "behavior": "Use the official Timeless bell icon for the notification trigger and empty state. Preserve unread count, history and explicit read/unread controls."
     },
     "RelativeTime": {
       "when": "Relative mail and notification timestamps with exact date tooltip"
@@ -307,9 +308,26 @@
       "backgroundColor": "{tokens.color.canvas}",
       "behavior": "Drag title bar or use arrow keys; resize within the browser page; mobile viewport fit. Preserve draft during mail navigation, confirm discard, validate recipient and attachment limits, and use the durable outbox for send. Automatically inherit Re: subject in the title; hide the subject editor until explicit edit. Minimize and maximize preserve the draft."
     },
+    "SidebarMoreMenu": {
+      "when": "Secondary mailbox actions beside the neutral secondary Add mailbox button in the sidebar footer",
+      "backgroundColor": "{tokens.color.canvas}",
+      "rounded": "{tokens.radius.control}",
+      "width": "{tokens.layout.mailMenu}",
+      "height": "{tokens.layout.target}",
+      "elevation": "{tokens.elevation.popover}",
+      "behavior": "Keep Add mailbox and More in one row, with More on the right. Collapse Refresh mailbox configuration and Sync logs into a dismissible menu above the footer, bounded by the action row width. Model owns open state. Focus the first enabled action on opening; support arrows, Home/End, Escape, outside click and focus dismissal; restore trigger focus on Escape or action. Preserve refresh progress and feedback. Footer removes local-reader and automatic-receive descriptions. Version appears beside the brand at the top."
+    },
     "NativeTrayMenu": {
       "when": "Desktop tray left/right click; system-native menu follows OS typography, colors, spacing, focus and theme.",
       "behavior": "Show the latest 10 real unread mail subjects in descending time order, global unread total, empty/loading/error labels and reader/refresh/quit actions. Mail clicks route by local ID to the owning account and folder. Opening the menu does not mark mail read. Normalize control characters and bound long subjects. The desktop starts only a tray and local Web service; mailbox and mail management open in the default browser. Do not create native mail windows."
+    },
+    "BrandHeader": {
+      "when": "Sidebar top brand identity",
+      "typography": "{tokens.type.display}",
+      "versionTypography": "{tokens.type.caption}",
+      "versionColor": "{tokens.color.muted}",
+      "gap": "{tokens.spacing.2}",
+      "behavior": "Show the logo, 简信 and the current version immediately to its right on one line. Omit the JIANXIN workspace subtitle. The main header omits its focus slogan and clock icon."
     }
   },
   "patterns": {

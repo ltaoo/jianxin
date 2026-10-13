@@ -102,6 +102,7 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
   const accountCores = new Map();
   const conversationCores = new Map(), unstarRequests = new Map();
   const loginRequests = new Map();
+  const refreshRequests = new Map();
   function stopLogin(id) {
     const request = loginRequests.get(id);
     request?.controller.abort(); timers.clearTimeout(request?.timer); loginRequests.delete(id);
@@ -143,6 +144,8 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
     reply: ReplyCore({ service, timers, replied() { methods.refresh({ silent: true }); } }),
     configImport: ConfigImportCore({ service, imported() { methods.init(); } }),
     importMailboxes: control({ label: '添加邮箱' }, { click() { ui.configImport.open(); } }),
+    sidebarMore: Object.assign(control({ label: '更多', open: false }, { click() { methods.toggleSidebarMore(); } }),
+      { close() { methods.closeSidebarMore(); } }),
     search: control({ value: state.query.value }, { input() {},
       keydown(event) { if (event.key === 'Enter') { event.preventDefault(); methods.search(); } if (event.key === 'Escape') { state.query.as(''); ui.search.set({ value: '' }); methods.search(); } } }),
     searchButton: control({ label: '搜索邮件' }, { click() { methods.search(); } }),
@@ -182,6 +185,8 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
   }
   groupSubscriptions.push(...[state.selected, state.threads, state.more].map(field => field.subscribe({ onChange: updateConversationNavigation })));
   const methods = {
+    toggleSidebarMore() { ui.sidebarMore.set({ open: !ui.sidebarMore.state.open }); },
+    closeSidebarMore() { if (ui.sidebarMore.state.open) ui.sidebarMore.set({ open: false }); },
     conversation(thread) {
       let core = conversationCores.get(thread.id);
       if (!core) {
@@ -231,6 +236,26 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
       if (thread) methods.select(thread);
     },
     mailbox(id) { return accountCores.get(id); },
+    async refreshMailbox(core) {
+      const id = core.state.id;
+      if (destroyed || core.state.refreshBusy || refreshRequests.has(id)) return;
+      const request = new AbortController(); refreshRequests.set(id, request);
+      const current = () => !destroyed && !request.signal.aborted && accountCores.get(id) === core;
+      core.set({ menuOpen: false, refreshBusy: true, refreshError: '' });
+      try {
+        await service.refreshMailbox(id, request.signal);
+        if (current()) await methods.refresh({ silent: true });
+      } catch (error) {
+        if (current() && error.name !== 'AbortError') {
+          core.set({ refreshError: `刷新失败：${error.message}，请重试。` });
+          notifications.record(`mailbox-refresh-${id}`, '邮箱刷新失败', `无法刷新 ${core.state.email}，请检查邮箱状态后重试。`);
+          await methods.loadMailboxes().catch(() => {});
+        }
+      } finally {
+        if (refreshRequests.get(id) === request) refreshRequests.delete(id);
+        if (current()) core.set({ refreshBusy: false });
+      }
+    },
     async loadMailboxes({ reload = false } = {}) {
       mailboxRequest?.abort(); const request = mailboxRequest = new AbortController();
       const version = flagVersion;
@@ -249,7 +274,7 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
       const groups = accounts.map(account => {
         let core = accountCores.get(account.id);
         if (!core) {
-          core = MailboxCore(account, { click() { methods.selectAccount(account.id); }, login(core) { return methods.startOAuth(core); }, saveOAuth(core) { return methods.saveOAuthSettings(core); } });
+          core = MailboxCore(account, { click() { methods.selectAccount(account.id); }, refresh(core) { return methods.refreshMailbox(core); }, login(core) { return methods.startOAuth(core); }, saveOAuth(core) { return methods.saveOAuthSettings(core); } });
           accountCores.set(account.id, core);
         } else {
           // Keep folder VNodes and focus when only the sync status changes.
@@ -261,7 +286,7 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
         return core;
       });
       for (const [id, core] of accountCores) {
-        if (!result.accounts.some(account => account.id === id)) { stopLogin(id); core.destroy(); accountCores.delete(id); }
+        if (!result.accounts.some(account => account.id === id)) { stopLogin(id); refreshRequests.get(id)?.abort(); refreshRequests.delete(id); core.destroy(); accountCores.delete(id); }
       }
       if (JSON.stringify(state.accounts.value) !== JSON.stringify(accounts)) state.accounts.as(accounts);
       if (groups.length !== state.accountGroups.value.length || groups.some((core, i) => core !== state.accountGroups.value[i])) state.accountGroups.as(groups);
@@ -479,6 +504,7 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
     },
     destroy() {
       destroyed = true; listRequest?.abort(); detailRequest?.abort(); mailboxRequest?.abort();
+      refreshRequests.forEach(request => request.abort()); refreshRequests.clear();
       unstarRequests.forEach(request => request.abort()); unstarRequests.clear();
       conversationCores.forEach(core => core.destroy()); conversationCores.clear();
       for (const id of loginRequests.keys()) stopLogin(id);
