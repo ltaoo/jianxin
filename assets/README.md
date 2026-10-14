@@ -37,13 +37,14 @@ python3 scripts/generate-icons.py --reset tray --reset android
 | macOS Dock / Finder / .app / 系统通知 | `jianxin-macos.png`，1024 px，透明外边距 100 px、圆角图块 824 px；打包时生成 `Jianxin.icns` |
 | Windows .exe | `jianxin.ico`，16 / 24 / 32 / 48 / 64 / 128 / 256 px；Cargo 自动嵌入 |
 | macOS 托盘 | `jianxin-tray-template.png`，36 px；AppKit 按 18 pt 显示并自动适配明暗颜色 |
-| Windows / Linux 托盘 | `jianxin-tray.png`，32 px；保持托盘 SVG 的颜色，需自行选择适合系统主题的颜色 |
+| Windows 托盘 | `jianxin-tray-windows.png`，32 px；主题蓝色信封、白色封口线，透明背景；使用 `--windows-tray-source` 替换，重置后跟随 `tray` 源 |
+| Linux 托盘 | `jianxin-tray.png`，32 px；保持托盘 SVG 的颜色，需自行选择适合系统主题的颜色 |
 | Windows / Linux 通知 | `jianxin-notification.png`，256 px；注册通知身份时写入系统图标位置 |
 | Android 启动 / 最近任务 / 应用信息 | 自适应图标，432 px 前景，主体位于安全区域；背景取 Android SVG 左上角颜色；主题单色图标共用托盘源 |
 | iOS | 不透明 1024 px AppIcon，系统应用圆角 |
 | Web / 桌面内置阅读器 | `jianxin-web.svg` 用于应用内 Logo 和 SVG favicon；另导出 `jianxin-favicon.ico` 供外部静态站点使用 |
 
-macOS 通知角标由系统使用 `.app` 图标，跟随 `macos` 场景；无法通过 `--notification-source` 单独替换该角标。当前保留一个来自同一图案的透明单色托盘源，换主图时可同时提供新的 `--tray-source`。
+macOS 通知角标由系统使用 `.app` 图标，跟随 `macos` 场景；无法通过 `--notification-source` 单独替换该角标。当前托盘源为独立的圆角信封单色图案，带清晰的封口折线，也用于 Android 主题单色图标；换主图时可同时提供新的 `--tray-source`。
 
 生成资源不会修改已安装或正在运行的应用。替换后重新构建各端并安装新版本；macOS 执行 `bash scripts/build-macos-app.sh`（加 `--install` 安装），Windows 执行 `scripts/build-desktop.ps1`，Android / iOS 构建方式见 [移动端说明](../docs/mobile.md)。系统或浏览器缓存图标时，退出旧版本后重新启动或刷新页面。
 

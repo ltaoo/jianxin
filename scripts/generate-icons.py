@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / 'assets'
 SVG = 'http://www.w3.org/2000/svg'
 ET.register_namespace('', SVG)
-SCENES = ('tray', 'macos', 'windows', 'notification', 'android', 'ios', 'web')
+SCENES = ('tray', 'windows-tray', 'macos', 'windows', 'notification', 'android', 'ios', 'web')
 
 
 def svg_bytes(path):
@@ -62,6 +62,7 @@ def generate(sources):
     outputs[ASSETS / 'jianxin-icon.png'] = render(sources['main'], 1024)
     outputs[ASSETS / 'jianxin-macos.png'] = render(framed_svg(sources['macos'], 100, rounded=True), 1024)
     outputs[ASSETS / 'jianxin-tray.png'] = render(sources['tray'], 32)
+    outputs[ASSETS / 'jianxin-tray-windows.png'] = render(sources['windows-tray'], 32)
     outputs[ASSETS / 'jianxin-tray-template.png'] = render(framed_svg(sources['tray'], 60), 36, monochrome=True)
     outputs[ASSETS / 'jianxin-notification.png'] = render(sources['notification'], 256)
     outputs[ASSETS / 'jianxin.ico'] = ico([(size, render(sources['windows'], size)) for size in (16, 24, 32, 48, 64, 128, 256)])
@@ -85,7 +86,7 @@ def main():
     parser.add_argument('--reset', action='append', choices=SCENES, default=[], help='remove a scene override; repeat for multiple scenes')
     parser.add_argument('--check', action='store_true', help='verify committed assets without changing files')
     args = parser.parse_args()
-    if args.check and (args.source or args.reset or any(getattr(args, f'{scene}_source') for scene in SCENES)):
+    if args.check and (args.source or args.reset or any(getattr(args, f'{scene.replace("-", "_")}_source') for scene in SCENES)):
         parser.error('--check cannot be combined with replacements or resets')
     for tool in ('rsvg-convert', 'magick'):
         if not shutil.which(tool):
@@ -96,14 +97,15 @@ def main():
     removals = []
     for scene in SCENES:
         override = ASSETS / f'logo-overrides/{scene}.svg'
-        source = getattr(args, f'{scene}_source')
+        source = getattr(args, f'{scene.replace("-", "_")}_source')
         if scene in args.reset and source:
             parser.error(f'--reset {scene} conflicts with --{scene}-source')
         if scene in args.reset:
             removals.append(override)
         if source:
             replacements[override] = svg_bytes(source)
-        sources[scene] = replacements.get(override) or (svg_bytes(override) if override.exists() and scene not in args.reset else main_source)
+        fallback = sources['tray'] if scene == 'windows-tray' else main_source
+        sources[scene] = replacements.get(override) or (svg_bytes(override) if override.exists() and scene not in args.reset else fallback)
     # Render everything before writing; invalid sources cannot leave partially generated assets.
     outputs = generate(sources)
     outputs.update(replacements)

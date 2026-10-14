@@ -15,8 +15,8 @@
   <path fill="#FFFBE9" data-n="ivory-closed-beak" d="M256 364C272 364 302 390 302 403C302 418 274 431 256 433C238 431 210 418 210 403C210 390 240 364 256 364Z"/>
   </g>
   <g transform="rotate(0 256 490)" data-n="foreground-letter">
-  <rect x="54" y="413" width="404" height="154" rx="20.02" fill="#FFFFFF" data-n="envelope-body"/>
-  <path fill="none" stroke="#2563EB" stroke-width="14.947999999999999" stroke-linecap="round" stroke-linejoin="round" data-n="envelope-flap" d="M69 432L244 503.86Q256 516.18 268 503.86L443 432"/>
+  <rect x="84" y="413" width="344" height="154" rx="36" fill="#FFFFFF" data-n="envelope-body"/>
+  <path fill="none" stroke="#2563EB" stroke-width="14.947999999999999" stroke-linecap="round" stroke-linejoin="round" data-n="envelope-flap" d="M105 435L236 494Q256 510 276 494L407 435"/>
   </g>
   </g>
 </svg>

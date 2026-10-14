@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="envelope-title envelope-desc" data-n="jianxin-windows-envelope-logo">
+  <title id="envelope-title" data-n="envelope-title">简信 · 蓝色信件</title>
+  <desc id="envelope-desc" data-n="envelope-description">主题蓝色的圆角信封，白色封口折线，透明背景，用于 Windows 托盘。</desc>
+  <rect x="64" y="112" width="384" height="288" rx="48" fill="#2563EB" data-n="envelope-body"/>
+  <path d="M96 152L232 258Q256 278 280 258L416 152" fill="none" stroke="#FFFFFF" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" data-n="envelope-flap"/>
+</svg>

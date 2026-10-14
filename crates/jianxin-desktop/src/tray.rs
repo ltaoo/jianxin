@@ -209,7 +209,7 @@ impl NativeTray {
         #[cfg(target_os = "macos")]
         let icon_bytes = include_bytes!("../../../assets/jianxin-tray-template.png").as_slice();
         #[cfg(target_os = "windows")]
-        let icon_bytes = include_bytes!("../../../assets/jianxin-tray.png").as_slice();
+        let icon_bytes = include_bytes!("../../../assets/jianxin-tray-windows.png").as_slice();
         let image =
             image::load_from_memory_with_format(icon_bytes, image::ImageFormat::Png)?.into_rgba8();
         let (width, height) = image.dimensions();
