@@ -6,6 +6,7 @@ import { ControlCore } from '../../../packages/jxui/core.js';
 import { MailMessage } from '../../../packages/jxui/mail-message.js';
 import { ReplyWindow } from '../../../packages/jxui/reply-window.js';
 import { ConfigImport } from '../../../packages/jxui/config-import.js';
+import { Settings } from '../../../packages/jxui/settings.js';
 import { InboxPageModel } from './index.model.js';
 
 export function InboxPageView(props) {
@@ -62,7 +63,7 @@ export function InboxPageView(props) {
       View({ class: 'jx-sidebar-footer', attributes: { n: 'mailbox-sidebar-footer' } }, [
         View({ class: 'jx-sidebar-actions', attributes: { n: 'sidebar-actions' } }, [
           Button({ store: ui.importMailboxes, variant: 'secondary', attributes: { n: 'import-mailbox-config' } }),
-          SidebarMoreMenu({ store: ui.sidebarMore, reload: ui.reloadMailboxes, root: props.root }),
+          SidebarMoreMenu({ store: ui.sidebarMore, reload: ui.reloadMailboxes, settings: ui.settings, root: props.root }),
         ]),
         Show({ when: s.configStatus, ok: () => View({ as: 'p', class: 'jx-muted', attributes: { n: 'mailbox-config-feedback', role: 'status' } }, [s.configStatus]) })]),
     ]);
@@ -140,5 +141,5 @@ export function InboxPageView(props) {
       NotificationCenter({ store: ui.notifications }), Button({ store: agentToggle, icon: 'agent', variant: 'ghost' }),
     ]),
     View({ class: 'jx-main-row' }, [View({ class: 'jx-split' }, [List(), Show({ when: selected, ok: Reader })]), AgentPanel({ store: agent })]),
-  ]), ReplyWindow({ store: ui.reply }), ConfigImport({ store: ui.configImport, root: props.root })]);
+  ]), ReplyWindow({ store: ui.reply }), ConfigImport({ store: ui.configImport, root: props.root }), Settings({ store: ui.settings })]);
 }

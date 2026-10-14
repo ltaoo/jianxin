@@ -45,6 +45,7 @@ impl Default for AppConfig {
 pub struct GeneralConfig {
     /// Overrides the platform data directory (SQLite db, attachment cache).
     pub data_dir: Option<PathBuf>,
+    pub tray_show_unread_count: bool,
     pub sync: SyncConfig,
     pub watch: WatchConfig,
     pub compose: ComposeConfig,
@@ -56,6 +57,7 @@ impl Default for GeneralConfig {
     fn default() -> Self {
         Self {
             data_dir: None,
+            tray_show_unread_count: true,
             sync: SyncConfig::default(),
             watch: WatchConfig::default(),
             compose: ComposeConfig::default(),
@@ -660,6 +662,15 @@ pub fn example_config() -> AppConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tray_unread_count_defaults_to_visible_and_round_trips() {
+        let old: AppConfig = serde_json::from_str("{}").unwrap();
+        assert!(old.general.tray_show_unread_count);
+        let config: AppConfig = serde_json::from_str(r#"{"general":{"tray_show_unread_count":false}}"#).unwrap();
+        let restored: AppConfig = serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+        assert!(!restored.general.tray_show_unread_count);
+    }
 
     #[test]
     fn agent_configuration_is_optional_and_secrets_are_redacted() {

@@ -92,6 +92,7 @@ fn reload_accounts(
         let loaded = jianxin_config::AppConfig::load(path)?;
         let mut config = app.config().clone();
         config.accounts = loaded.accounts;
+        config.general.tray_show_unread_count = loaded.general.tray_show_unread_count;
         app.reload_config(config)?;
         *modified = Some(current);
     }
@@ -340,6 +341,20 @@ fn open_url(app: &App, root: &str, request: &OpenRequest) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saved_tray_setting_reloads_into_the_snapshot_without_hiding_unread_total() {
+        let path = std::env::temp_dir().join(format!("jianxin-tray-setting-{}.json", jianxin_domain::new_id()));
+        let mut config = jianxin_config::AppConfig::default();
+        let mut app = App::with_database(config.clone(), jianxin_store::Database::open_in_memory().unwrap()).unwrap();
+        assert!(model::load_snapshot(&app).unwrap().show_unread_count);
+        config.general.tray_show_unread_count = false;
+        config.save(&path).unwrap();
+        reload_accounts(&mut app, &path, &mut None).unwrap();
+        let snapshot = model::load_snapshot(&app).unwrap();
+        assert!(!snapshot.show_unread_count);
+        assert_eq!(snapshot.total, 0);
+        std::fs::remove_file(path).unwrap();
+    }
     #[test]
     fn mailbox_refresh_waits_for_a_single_account_request_without_scheduling_all_accounts() {
         let (sync, requests) = mpsc::channel();

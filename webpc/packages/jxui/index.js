@@ -37,7 +37,7 @@ export function Input({ store, label, placeholder = '', ...rest }) {
     }, onUnmounted() { off(); b.cleanup(); },
   });
 }
-export function SidebarMoreMenu({ store, reload, root = '' }) {
+export function SidebarMoreMenu({ store, reload, settings, root = '' }) {
   const b = binding(store), refresh = binding(reload);
   const refreshLabel = refresh.derive(s => s.label), refreshDisabled = refresh.derive(s => s.disabled ? '' : undefined);
   let target, detach = () => {};
@@ -74,6 +74,8 @@ export function SidebarMoreMenu({ store, reload, root = '' }) {
         onClick(event) { dismiss(); reload.click(event); } }, [Glyph('refresh'), refreshLabel]),
       View({ as: 'a', class: 'jx-mail-menu-action', attributes: { n: 'sync-logs-navigation', href: `${root}/logs` },
         onClick: dismiss }, [Glyph('clock'), '同步日志']),
+      View({ as: 'button', class: 'jx-mail-menu-action', attributes: { n: 'open-settings', type: 'button' },
+        onClick() { dismiss(); settings.open(); } }, [Glyph('settings'), '配置']),
     ]) }),
   ]);
 }
@@ -83,6 +85,7 @@ export function Avatar({ name }) {
   const hash = Array.from(name || '').reduce((value, letter) => value + letter.codePointAt(0), 0);
   return View({ class: `jx-avatar jx-avatar--${tones[hash % tones.length]}`, attributes: { n: 'sender-avatar', 'aria-hidden': 'true' } }, [Array.from(name || '?')[0].toUpperCase()]); }
 const iconNames = {
+  settings: 'settings',
   agent: 'bot', mail: 'inbox', all: 'file-stack', inbox: 'inbox', sent: 'upload', drafts: 'pen-line',
   archive: 'box', trash: 'trash-2', spam: 'circle-alert', custom: 'folder',
   unread: 'message-square-more', starred: 'star', refresh: 'refresh-cw', back: 'arrow-left', close: 'x',

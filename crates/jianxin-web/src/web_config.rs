@@ -23,6 +23,36 @@ fn read_json(reader: &mut dyn Read) -> Result<Value> {
     serde_json::from_slice(&bytes).context("配置内容不是有效 JSON")
 }
 
+pub(super) fn settings(path: &Path) -> Reply {
+    reply((|| -> Result<Value> {
+        let config = jianxin_config::AppConfig::load(path)
+            .map_err(|_| anyhow::anyhow!("配置读取失败，请检查文件权限后重试"))?;
+        Ok(json!({"tray_show_unread_count": config.general.tray_show_unread_count}))
+    })())
+}
+
+pub(super) fn save_settings(path: &Path, reader: &mut dyn Read) -> Reply {
+    reply((|| -> Result<Value> {
+        let value = read_json(reader)?;
+        let show = value["tray_show_unread_count"].as_bool()
+            .context("托盘未读数设置必须为布尔值")?;
+        let save = (|| -> Result<()> {
+            let mut config = jianxin_config::AppConfig::load(path)?;
+            config.general.tray_show_unread_count = show;
+            let temporary = path.with_extension(format!("settings-{}.tmp", uuid::Uuid::new_v4()));
+            let result = (|| -> Result<()> {
+                config.save(&temporary)?;
+                std::fs::rename(&temporary, path)?;
+                Ok(())
+            })();
+            if result.is_err() { let _ = std::fs::remove_file(&temporary); }
+            Ok(result?)
+        })();
+        save.map_err(|_| anyhow::anyhow!("配置保存失败，请检查文件权限或稍后重试"))?;
+        Ok(json!({"tray_show_unread_count": show}))
+    })())
+}
+
 pub(super) fn presets() -> Reply {
     let providers: Vec<_> = [
         ("qq", "QQ", "qq.com"),

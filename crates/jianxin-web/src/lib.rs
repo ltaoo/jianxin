@@ -51,6 +51,51 @@ mod tests {
         time::Duration,
     };
     #[test]
+    fn tray_settings_http_validates_writes_persists_and_exposes_only_the_preference() {
+        let directory = std::env::temp_dir().join(format!("jianxin-settings-{}", uuid::Uuid::new_v4()));
+        let path = directory.join("config.json");
+        let config: jianxin_config::AppConfig = serde_json::from_value(serde_json::json!({
+            "general":{"data_dir":directory,"watch":{"interval_secs":123},"api":{"token":"private-token"}},
+            "accounts":[{"email":"saved@example.com","auth":{"type":"password","password":"private-password"}}]
+        })).unwrap();
+        config.save(&path).unwrap();
+        let app = jianxin_core::App::with_database(config.clone(), jianxin_store::Database::open_in_memory().unwrap()).unwrap();
+        let (ready, address) = mpsc::channel();
+        let control = ServiceControl { ready: Some(ready), ..Default::default() };
+        let shutdown = control.shutdown.clone();
+        let server_path = path.clone();
+        let worker = std::thread::spawn(move || serve(app, &server_path, None, 0, None, false, 0, control));
+        let url = address.recv_timeout(Duration::from_secs(5)).unwrap();
+        let host = url.strip_prefix("http://").unwrap().trim_end_matches('/');
+        for (method, marker, body, status, show) in [
+            ("GET", "", "", 200, true),
+            ("POST", "", r#"{"tray_show_unread_count":false}"#, 403, true),
+            ("POST", "X-Jianxin-Request: 1\r\n", r#"{"tray_show_unread_count":"false"}"#, 400, true),
+            ("POST", "X-Jianxin-Request: 1\r\n", r#"{"tray_show_unread_count":false}"#, 200, false),
+            ("GET", "", "", 200, false),
+        ] {
+            let mut stream = TcpStream::connect(host).unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            write!(stream, "{method} /api/config/settings HTTP/1.1\r\nHost: {host}\r\nOrigin: http://{host}\r\n{marker}Content-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            let mut response = String::new();
+            stream.read_to_string(&mut response).unwrap();
+            assert!(response.starts_with(&format!("HTTP/1.1 {status}")), "{response}");
+            assert!(!response.contains("private-"));
+            if status == 200 {
+                let value: serde_json::Value = serde_json::from_str(response.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+                assert_eq!(value, serde_json::json!({"tray_show_unread_count":show}));
+            }
+            assert_eq!(jianxin_config::AppConfig::load(&path).unwrap().general.tray_show_unread_count, show);
+        }
+        shutdown.store(true, Ordering::SeqCst);
+        worker.join().unwrap().unwrap();
+        let loaded = jianxin_config::AppConfig::load(&path).unwrap();
+        assert_eq!(serde_json::to_value(loaded.accounts).unwrap(), serde_json::to_value(config.accounts).unwrap());
+        assert_eq!(loaded.general.watch.interval_secs, 123);
+        assert!(loaded.general.api.token.is_some());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
     fn mailbox_refresh_http_requires_post_and_request_marker_and_targets_only_one_account() {
         #[derive(Default)]
         struct Hooks(std::sync::Mutex<Vec<String>>);

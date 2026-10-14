@@ -222,6 +222,16 @@ fn serve_with_server(
                 respond(request, reply);
                 continue;
             }
+            if route == Some("api/config/settings") {
+                last_request = Instant::now();
+                let reply = if Arc::get_mut(&mut agent).is_some() {
+                    web_config::save_settings(config_path, request.as_reader())
+                } else {
+                    Reply::json(409, serde_json::json!({"error":"正在处理邮件或授权，请稍后保存配置"}))
+                };
+                respond(request, reply);
+                continue;
+            }
             if route == Some("api/config/import") {
                 last_request = Instant::now();
                 let reply = match Arc::get_mut(&mut agent) {
@@ -318,7 +328,9 @@ fn serve_with_server(
             Reply::error(405, "仅支持阅读页面及 POST 邮件操作")
         } else {
             last_request = Instant::now();
-            if route.unwrap().split('?').next() == Some("api/agent") {
+            if route == Some("api/config/settings") {
+                web_config::settings(config_path)
+            } else if route.unwrap().split('?').next() == Some("api/agent") {
                 agent.get(route.unwrap())
             } else if route.unwrap().split('?').next() == Some("api/mailboxes/oauth") {
                 agent.oauth(route.unwrap(), false, config_path, &active_writes)

@@ -12,6 +12,18 @@ pub enum Action {
     Quit,
 }
 
+#[cfg(any(target_os = "macos", test))]
+fn unread_title(total: u64, show: bool) -> Option<String> {
+    (show && total > 0).then(|| total.to_string())
+}
+
+#[test]
+fn unread_count_title_respects_visibility_and_zero() {
+    assert_eq!(unread_title(12, true), Some("12".into()));
+    assert_eq!(unread_title(12, false), None);
+    assert_eq!(unread_title(0, true), None);
+}
+
 #[derive(Clone)]
 enum Entry {
     Label(String),
@@ -40,7 +52,7 @@ fn entries(snapshot: &Snapshot, status: Option<&str>) -> Vec<Entry> {
     } else {
         entries.extend(
             snapshot.rows.iter().take(10).map(|row| {
-                Entry::Item(menu_title(&row.subject), Action::Open(Some(row.id.clone())))
+                Entry::Item(mail_title(row), Action::Open(Some(row.id.clone())))
             }),
         );
     }
@@ -74,6 +86,14 @@ fn mailbox_title(mailbox: &crate::model::MailboxRow) -> String {
             .unwrap_or_else(|| "尚无同步记录".into()),
         mailbox.status
     )
+}
+
+fn mail_title(row: &crate::model::MailRow) -> String {
+    let time = row.timestamp
+        .and_then(|time| chrono::DateTime::from_timestamp(time, 0))
+        .map(|time| time.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string())
+        .unwrap_or_else(|| "时间未知".into());
+    format!("{} · {time}", menu_title(&row.subject))
 }
 
 fn menu_title(subject: &str) -> String {
@@ -111,7 +131,7 @@ impl Tray {
     pub fn update(&mut self, snapshot: Snapshot, status: Option<String>) -> Result<()> {
         if self.snapshot != snapshot || self.status != status {
             self.native
-                .update(entries(&snapshot, status.as_deref()), snapshot.total)?;
+                .update(entries(&snapshot, status.as_deref()), snapshot.total, snapshot.show_unread_count)?;
             self.snapshot = snapshot;
             self.status = status;
         }
@@ -231,18 +251,14 @@ impl NativeTray {
             incoming,
         })
     }
-    fn update(&mut self, entries: Vec<Entry>, total: u64) -> Result<()> {
+    fn update(&mut self, entries: Vec<Entry>, total: u64, _show_unread_count: bool) -> Result<()> {
         let (menu, actions) = Self::menu(entries, &self.quit_item)?;
         self.icon.set_menu(Some(Box::new(menu)));
         self.actions = actions;
         self.icon
             .set_tooltip(Some(format!("简信 · {total} 封未读邮件")))?;
         #[cfg(target_os = "macos")]
-        self.icon.set_title(if total > 0 {
-            Some(total.to_string())
-        } else {
-            None
-        });
+        self.icon.set_title(unread_title(total, _show_unread_count));
         Ok(())
     }
     fn actions(&mut self) -> Vec<Action> {
@@ -376,7 +392,7 @@ impl NativeTray {
         .spawn()?;
         Ok(Self { handle, incoming })
     }
-    fn update(&mut self, entries: Vec<Entry>, total: u64) -> Result<()> {
+    fn update(&mut self, entries: Vec<Entry>, total: u64, _show_unread_count: bool) -> Result<()> {
         self.handle.update(move |tray| {
             tray.entries = entries;
             tray.total = total;
@@ -497,14 +513,18 @@ mod tests {
     }
 
     #[test]
-    fn menu_keeps_title_only_and_routes_duplicate_titles_by_id() {
+    fn menu_shows_local_mail_time_and_routes_duplicate_titles_by_id() {
+        use chrono::TimeZone;
+        let timestamp = chrono::Local.with_ymd_and_hms(2026, 10, 14, 9, 30, 0).single().unwrap().timestamp();
         let snapshot = Snapshot {
             loaded: true,
             total: 12,
+            show_unread_count: true,
             rows: (0..12)
                 .map(|index| crate::model::MailRow {
                     id: format!("mail-{index}"),
                     subject: "Same & subject".into(),
+                    timestamp: Some(timestamp),
                 })
                 .collect(),
             error: None,
@@ -519,10 +539,16 @@ mod tests {
             })
             .collect();
         assert_eq!(mails.len(), 10);
-        assert_eq!(mails[0], ("Same & subject", "mail-0"));
+        assert_eq!(mails[0], ("Same & subject · 2026-10-14 09:30", "mail-0"));
         assert_eq!(mails[9].1, "mail-9");
         assert_eq!(menu_title(" \n\t "), "（无主题）");
         assert_eq!(menu_title("First\nsecond\tthird"), "First second third");
         assert_eq!(menu_title(&"标题".repeat(100)).chars().count(), 81);
+        for timestamp in [None, Some(i64::MAX)] {
+            let row = crate::model::MailRow { id: "unknown".into(), subject: "".into(), timestamp };
+            assert_eq!(mail_title(&row), "（无主题） · 时间未知");
+        }
+        let row = crate::model::MailRow { id: "long".into(), subject: "标题".repeat(100), timestamp: Some(timestamp) };
+        assert!(mail_title(&row).ends_with("… · 2026-10-14 09:30"));
     }
 }

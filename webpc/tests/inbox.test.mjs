@@ -884,7 +884,7 @@ test('sidebar More supports keyboard and outside dismissal, keeps logs scoped an
     querySelector: () => trigger, querySelectorAll: () => [first, second],
     addEventListener(name, callback) { targetListeners.set(name, callback); }, removeEventListener(name) { targetListeners.delete(name); } };
   model.ui.sidebarMore.click();
-  const view = SidebarMoreMenu({ store: model.ui.sidebarMore, reload: model.ui.reloadMailboxes, root: '/secret' });
+  const view = SidebarMoreMenu({ store: model.ui.sidebarMore, reload: model.ui.reloadMailboxes, settings: model.ui.settings, root: '/secret' });
   try {
     const panel = find(view, 'sidebar-more-panel');
     panel.$elm = { get$elm: () => ({ querySelector: () => first }) };
@@ -893,6 +893,13 @@ test('sidebar More supports keyboard and outside dismissal, keeps logs scoped an
     assert.equal(find(view, 'sidebar-more-toggle').state.attributes['aria-expanded'], 'true');
     const logs = find(view, 'sync-logs-navigation');
     assert.equal(logs.state.as, 'a'); assert.equal(logs.state.attributes.href, '/secret/logs');
+    const settings = find(view, 'open-settings');
+    assert.equal(settings.state.as, 'button');
+    settings.events.onClick();
+    assert.equal(model.ui.sidebarMore.state.open, false);
+    assert.equal(model.ui.settings.state.open, true);
+    model.ui.settings.close(); model.ui.sidebarMore.click();
+    first.focus();
     const key = key => targetListeners.get('keydown')({ key, preventDefault() {}, stopPropagation() {} });
     key('ArrowDown'); assert.equal(focused, 'logs');
     document.activeElement = trigger; key('ArrowUp'); assert.equal(focused, 'logs');

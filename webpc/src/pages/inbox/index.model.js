@@ -2,6 +2,7 @@ import { ControlCore, MailboxCore, NotificationCore } from '../../../packages/jx
 import { MailService } from '../../services.js';
 import { ReplyCore } from '../../../packages/jxui/reply-core.js';
 import { ConfigImportCore } from '../../../packages/jxui/config-import-core.js';
+import { SettingsCore } from '../../../packages/jxui/settings-core.js';
 import packageInfo from '../../../package.json' with { type: 'json' };
 
 export function MessageCore(message, { service, options, expanded, changed, starredChanged = () => {}, started = () => {}, settled = () => {}, failed = () => {}, reply = () => {} }) {
@@ -143,6 +144,7 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
     notifications,
     reply: ReplyCore({ service, timers, replied() { methods.refresh({ silent: true }); } }),
     configImport: ConfigImportCore({ service, imported() { methods.init(); } }),
+    settings: SettingsCore({ service }),
     importMailboxes: control({ label: '添加邮箱' }, { click() { ui.configImport.open(); } }),
     sidebarMore: Object.assign(control({ label: '更多', open: false }, { click() { methods.toggleSidebarMore(); } }),
       { close() { methods.closeSidebarMore(); } }),
@@ -167,7 +169,7 @@ export function InboxPageModel({ root, location, history, storage, service = Mai
     retryDetail: control({ label: '重新加载邮件' }, { click() { methods.loadDetail(); } }),
     loadMore: control({ label: '加载后续邮件' }, { click() { methods.loadDetail(true); } }),
   };
-  controls.push(ui.reply, ui.configImport);
+  controls.push(ui.reply, ui.configImport, ui.settings);
   function conversationIndex() {
     const selected = state.selected.value;
     return selected ? state.threads.value.findIndex(thread => thread.id === (selected.kind === 'message' ? selected.thread_id : selected.id)) : -1;

@@ -7,11 +7,13 @@ pub const LIST_LIMIT: u32 = 10;
 pub struct MailRow {
     pub id: String,
     pub subject: String,
+    pub timestamp: Option<i64>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Snapshot {
     pub total: u64,
+    pub show_unread_count: bool,
     pub rows: Vec<MailRow>,
     pub error: Option<String>,
     pub loaded: bool,
@@ -33,6 +35,7 @@ pub fn load_snapshot(app: &App) -> Result<Snapshot> {
         .list_all(LIST_LIMIT, 0, true)?
         .into_iter()
         .map(|message| MailRow {
+            timestamp: message.sent_at.or(message.received_at),
             id: message.id,
             subject: if message.subject.trim().is_empty() {
                 "（无主题）".into()
@@ -43,6 +46,7 @@ pub fn load_snapshot(app: &App) -> Result<Snapshot> {
         .collect();
     Ok(Snapshot {
         total,
+        show_unread_count: app.config().general.tray_show_unread_count,
         rows,
         loaded: true,
         error: None,
@@ -96,6 +100,7 @@ mod tests {
                     remote_id: i.to_string(),
                     subject: format!("Mail {index}-{i}"),
                     sent_at: Some(1000 + i * 2 + index as i64),
+                    received_at: Some(2000 + i * 2 + index as i64),
                     ..Message::default()
                 };
                 message_repo::upsert_many(&app.db().lock(), std::slice::from_ref(&message))
@@ -127,7 +132,13 @@ mod tests {
         assert_eq!(snapshot.total, 40);
         assert_eq!(snapshot.rows.len(), LIST_LIMIT as usize);
         assert_eq!(snapshot.rows[0].id, "1-19");
+        assert_eq!(snapshot.rows[0].timestamp, Some(1039));
         assert!(!snapshot.rows.iter().any(|row| row.id == "copy"));
         assert_eq!(app.mail().count_all_unread().unwrap(), 40);
+        let mut latest = app.mail().get("1-19").unwrap();
+        latest.sent_at = None;
+        latest.received_at = Some(1039);
+        message_repo::upsert_many(&app.db().lock(), &[latest]).unwrap();
+        assert_eq!(load_snapshot(&app).unwrap().rows[0].timestamp, Some(1039));
     }
 }
